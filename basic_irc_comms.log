@@ -1,0 +1,33 @@
+<< CAP LS 302
+<< NICK tadz
+<< USER arsic 0 * :realname
+>> :arsicpc 001 tadz :Hi, welcome to IRC
+>> :arsicpc 002 tadz :Your host is arsicpc, running version miniircd-2.0
+>> :arsicpc 003 tadz :This server was created sometime
+>> :arsicpc 004 tadz arsicpc miniircd-2.0 o o
+>> :arsicpc 251 tadz :There are 1 users and 0 services on 1 server
+>> :arsicpc 422 tadz :MOTD File is missing
+<< PING LAG1606278999336
+>> :arsicpc PONG arsicpc :LAG1606278999336
+<< JOIN #test_channel
+>> :tadz!arsic@127.0.0.1 JOIN #test_channel
+<< MODE #test_channel
+<< WHO #test_channel
+>> :arsicpc 331 tadz #test_channel :No topic is set
+>> :arsicpc 353 tadz = #test_channel :tadz
+>> :arsicpc 366 tadz #test_channel :End of NAMES list
+>> :arsicpc 324 tadz #test_channel +
+>> :arsicpc 352 tadz #test_channel arsic 127.0.0.1 arsicpc tadz H :0 realname
+>> :arsicpc 315 tadz #test_channel :End of WHO list
+<< PRIVMSG #test_channel :weeeeeeeeeeeeeeeee
+<< PING LAG1606279029336
+>> :arsicpc PONG arsicpc :LAG1606279029336
+<< PART #test_channel :Leaving
+>> :tadz!arsic@127.0.0.1 PART #test_channel :Leaving
+<< PING LAG1606279059336
+>> :arsicpc PONG arsicpc :LAG1606279059336
+<< disc
+>> :arsicpc 421 tadz DISC :Unknown command
+<< PING LAG1606279089337
+>> :arsicpc PONG arsicpc :LAG1606279089337
+<< QUIT :Leaving
