@@ -13,28 +13,81 @@ import select
 users = {}
 channels = {}
 hostname = "the hut"
-IP = "127.0.0.1"
+IP = "::1"
 PORT = 6667
 
-server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-server_socket.bind((IP, PORT))
-server_socket.listen()
+serv_sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+serv_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+serv_sock.bind((IP, PORT))
+serv_sock.listen(5)
 
-sockets_list = [server_socket]
+sockets_list = [serv_sock]
 clients = {}
 
 print("Server started.")
 
+def comm_contents(data_str: str, comm_str: str, to_str: str = '\r') -> str:
+	if data_str.find(comm_str) == -1:
+		return None
+	else:
+		from_index = data_str.find(comm_str) + len(comm_str) + 1
+
+	find_to = data_str.find(to_str, from_index)
+	find_r = data_str.find('\r', from_index)
+	find_n = data_str.find ('\n', from_index)
+
+	to_index = find_to if find_to != -1 else (find_r if find_r != -1 else (find_n if find_n != -1 else len(data_str)-1))
+
+	if data_str.find(comm_str) != -1:
+		return data_str[from_index:to_index]
+
+
+def get_names(cl_sock: socket) -> (str, str):
+	nick = ""
+	realname = ""
+
+	print("------------------ CAP_START ------------------")
+
+	while nick == "" and realname == "":
+		data = cl_sock.recv(2 ** 10)
+		print("\033[1;36m== RAW data START ==\033[0m")
+		print(data)
+		print("\033[1;34m=== RAW data END ===\033[0m")
+		print()
+		data_str = data.decode("utf-8")
+
+		if comm_contents(data_str, "NICK") is not None:
+			nick = comm_contents(data_str, "NICK")
+		if comm_contents(data_str, "USER") is not None:
+			realname = comm_contents(data_str, "USER", ' ')
+
+		# nick_comm_index = data_str.find("NICK")
+		# if nick_comm_index != -1:
+		# 	# print("FOUND NICK COMM")
+		# 	nick_last_index = data_str.find('\r', nick_comm_index) if data_str.find('\r', nick_comm_index) != -1 else data_str.find('\n', nick_comm_index)
+		# 	if nick_last_index != -1:
+		# 		# print("FOUND ENDL")
+		# 		nick = data_str[nick_comm_index + 5:nick_last_index]
+		# 	else:
+		# 		# print("NO ENDL")
+		# 		nick = data_str[nick_comm_index + 5:]
+		# 	print(f"NICK \"{nick}\"")
+
+		# realname_comm_index = data_str.find("USER")
+		# if realname_comm_index != -1:
+		# 	realname = data_str[realname_comm_index + 5:data_str.find(' ', realname_comm_index + 5)]
+		
+	print(f"NICK \"{nick}\"")
+	print(f"USER \"{realname}\"")
+
+	print("------------------- CAP_END -------------------")
+
+
 while True:
 	read_sockets, _, exception_sockets = select.select(sockets_list, [], sockets_list)
 	for notified_socket in read_sockets:
-		if notified_socket == server_socket:
-			client_socket, client_address = server_socket.accept()
-			msg = client_socket.recv(2 ** 20)
-			print("--------- CONN_ESTAB_START ---------")
-			print(msg.decode("utf-8")))
-			if msg.startswith(b"CAP LS") and len(msg.decode("utf-8")) == 12:
-				msg = client_socket.recv(2 ** 20)
-				print(msg.decode("utf-8"))
-			print("---------- CONN_ESTAB_END ----------")
+		if notified_socket == serv_sock:
+			cl_sock, cl_addr = serv_sock.accept()
+			print("Connection from", cl_addr)
+			get_names(cl_sock)
+			
