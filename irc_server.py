@@ -9,10 +9,22 @@ https://ircv3.net/specs/core/capability-negotiation.html - stuff i found on CAP,
 
 import socket
 import select
+from datetime import datetime
+from pytz import reference
 
-users = {}
-channels = {}
-hostname = "the hut"
+motd = "No MOTD set."
+
+try:
+	motd = "MOTD: " + open("motd.txt", "r").read()
+except:
+	pass
+
+hostname = "the-inn"
+version = "0.1"
+today = datetime.now()
+tz_name = reference.LocalTimezone().tzname(today)
+create_time = today.strftime("%Y-%M-%D, %H:%M:%S")
+
 IP = "::1"
 PORT = 6667
 
@@ -20,11 +32,32 @@ serv_sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
 serv_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 serv_sock.bind((IP, PORT))
 serv_sock.listen(5)
+serv_sock.setblocking(False)
 
 sockets_list = [serv_sock]
 clients = {}
+channels = {}
 
-print("Server started.")
+
+print("\033[1;36mServer started.")
+print("Current time:", create_time, tz_name)
+print(f"Listening on [{IP}]:{PORT}\033[0m")
+
+def parse_sock(cl_sock: socket.socket) -> bytes:
+	try:
+		data = cl_sock.recv(2 ** 10)
+		if len(data) != 0:
+			print("\n\033[1;36m== RAW data START ==\033[0m")
+			print(data)
+			print("\033[1;34m=== RAW data END ===\033[0m\n")
+		else:
+			return False
+	except BrokenPipeError: # thank u vincent
+		return False
+	except ConnectionResetError:
+		return False
+	return data
+
 
 def comm_contents(data_str: str, comm_str: str, to_str: str = '\r') -> str:
 	if data_str.find(comm_str) == -1:
@@ -42,52 +75,67 @@ def comm_contents(data_str: str, comm_str: str, to_str: str = '\r') -> str:
 		return data_str[from_index:to_index]
 
 
-def get_names(cl_sock: socket) -> (str, str):
+def send_msg(cl_sock: socket.socket, msg: str):
+	cl_sock.sendall(bytes((msg + ("\r\n" if msg[len(msg)-2:] != "\r\n" else "")).encode("utf-8")))
+
+
+def new_client(cl_sock: socket.socket, cl_addr: tuple):
 	nick = ""
 	realname = ""
 
-	print("------------------ CAP_START ------------------")
+	while nick == "" or realname == "":
+		data = parse_sock(cl_sock)
+		if data is False:
+			print("FAILED connection from", cl_addr)
+			return
 
-	while nick == "" and realname == "":
-		data = cl_sock.recv(2 ** 10)
-		print("\033[1;36m== RAW data START ==\033[0m")
-		print(data)
-		print("\033[1;34m=== RAW data END ===\033[0m")
-		print()
 		data_str = data.decode("utf-8")
 
 		if comm_contents(data_str, "NICK") is not None:
 			nick = comm_contents(data_str, "NICK")
 		if comm_contents(data_str, "USER") is not None:
 			realname = comm_contents(data_str, "USER", ' ')
-
-		# nick_comm_index = data_str.find("NICK")
-		# if nick_comm_index != -1:
-		# 	# print("FOUND NICK COMM")
-		# 	nick_last_index = data_str.find('\r', nick_comm_index) if data_str.find('\r', nick_comm_index) != -1 else data_str.find('\n', nick_comm_index)
-		# 	if nick_last_index != -1:
-		# 		# print("FOUND ENDL")
-		# 		nick = data_str[nick_comm_index + 5:nick_last_index]
-		# 	else:
-		# 		# print("NO ENDL")
-		# 		nick = data_str[nick_comm_index + 5:]
-		# 	print(f"NICK \"{nick}\"")
-
-		# realname_comm_index = data_str.find("USER")
-		# if realname_comm_index != -1:
-		# 	realname = data_str[realname_comm_index + 5:data_str.find(' ', realname_comm_index + 5)]
 		
 	print(f"NICK \"{nick}\"")
 	print(f"USER \"{realname}\"")
 
-	print("------------------- CAP_END -------------------")
+	sockets_list.append(cl_sock)
+	clients[cl_sock] = {
+		'nick': nick,
+		'realname': realname
+	}
+
+	send_msg(cl_sock, f":{hostname} 001 {nick} :Yo, welcome to The Inn.")
+	send_msg(cl_sock, f":{hostname} 002 {nick} :Your host is {hostname}, running version {version}")
+	send_msg(cl_sock, f":{hostname} 003 {nick} :This server was created {create_time} {tz_name}")
+	send_msg(cl_sock, f":{hostname} 251 {nick} :There {f'are {len(clients)} users' if len(clients) != 1 else 'is 1 user'} on the server.")
+	send_msg(cl_sock, f":{hostname} 422 {nick} :{motd}")
 
 
 while True:
+	# print("IN_WHILE")
 	read_sockets, _, exception_sockets = select.select(sockets_list, [], sockets_list)
-	for notified_socket in read_sockets:
-		if notified_socket == serv_sock:
+	# print("GOT_SOCKS")
+
+	for sock in read_sockets:
+		# print("IN_FOR")
+		if sock == serv_sock:
 			cl_sock, cl_addr = serv_sock.accept()
-			print("Connection from", cl_addr)
-			get_names(cl_sock)
-			
+			print("OPEN connection from", cl_addr)
+			new_client(cl_sock, cl_addr)
+			print(clients)
+			# print("CAP_DONE")
+		else:
+			data = parse_sock(sock)
+
+			if data is False or data.decode("utf-8").find("QUIT") != -1:
+				print("CLOSE connection from", cl_addr)
+				sockets_list.remove(sock)
+				del clients[sock]
+				print(clients)
+				continue
+
+			user = clients[sock]
+			print(f"[{user['nick']}/{user['realname']}]: ")
+
+	# print("EXIT_FOR")

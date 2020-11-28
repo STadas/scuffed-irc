@@ -1,0 +1,29 @@
+<< CAP LS 302
+<< NICK tadz_
+<< USER arsic 0 * :arsic
+>> :arsicpc 001 tadz_ :Hi, welcome to IRC
+>> :arsicpc 002 tadz_ :Your host is arsicpc, running version miniircd-2.0
+>> :arsicpc 003 tadz_ :This server was created sometime
+>> :arsicpc 004 tadz_ arsicpc miniircd-2.0 o o
+>> :arsicpc 251 tadz_ :There are 1 users and 0 services on 1 server
+>> :arsicpc 422 tadz_ :MOTD File is missing
+<< PING LAG1606541538062
+>> :arsicpc PONG arsicpc :LAG1606541538062
+<< JOIN #test
+>> :tadz_!arsic@::1 JOIN #test
+<< MODE #test
+<< WHO #test
+>> :arsicpc 331 tadz_ #test :No topic is set
+>> :arsicpc 353 tadz_ = #test :tadz_
+>> :arsicpc 366 tadz_ #test :End of NAMES list
+>> :arsicpc 324 tadz_ #test +
+>> :arsicpc 352 tadz_ #test arsic ::1 arsicpc tadz_ H :0 arsic
+>> :arsicpc 315 tadz_ #test :End of WHO list
+>> :tadz!arsic@::1 JOIN #test
+<< PRIVMSG #test :yooooo
+<< PING LAG1606541568062
+>> :arsicpc PONG arsicpc :LAG1606541568062
+>> :tadz!arsic@::1 PRIVMSG #test :XDDDDD
+<< PART #test :Leaving
+>> :tadz_!arsic@::1 PART #test :Leaving
+<< QUIT :Leaving
