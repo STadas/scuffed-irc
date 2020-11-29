@@ -38,7 +38,6 @@ sockets_list = [serv_sock]
 clients = {}
 channels = {}
 
-
 print("\033[1;36mServer started.")
 print("Current time:", create_time, tz_name)
 print(f"Listening on [{IP}]:{PORT}\033[0m")
@@ -95,8 +94,16 @@ def new_client(cl_sock: socket.socket, cl_addr: tuple):
 		if comm_contents(data_str, "USER"):
 			realname = comm_contents(data_str, "USER", ' ')
 		
-	print(f"NICK \"{nick}\"")
-	print(f"USER \"{realname}\"")
+	print(f"NICK '{nick}'")
+	print(f"USER '{realname}'")
+
+	rejected_symbols = "\"`'!/\\%+-*#@$&;:,.\r\n\t [](){}"
+	for s in rejected_symbols:
+		if nick.find(s) != -1 or realname.find(s) != -1:
+			print("REJECTED connection from", cl_addr, f"(Nick or realname has any of: [!:@ *;#\"`'/\\%+-.\\r\\n\\t$,&])")
+			send_msg(cl_sock, f"Connection rejected. (Nick or realname has any of: [!:@ *;#\"`'/\\%+-.\\r\\n\\t$,&])\nPlease try to reconnect with a nick and realname without those symbols.")
+			return
+
 
 	sockets_list.append(cl_sock)
 	clients[cl_sock] = {
@@ -112,18 +119,19 @@ def new_client(cl_sock: socket.socket, cl_addr: tuple):
 	send_msg(cl_sock, f":{hostname} 251 {nick} :There {f'are {len(clients)} users' if len(clients) != 1 else 'is 1 user'} on the server.")
 	send_msg(cl_sock, f":{hostname} 422 {nick} :{motd}")
 
+	print(f"NEW USER '{nick}!{realname}'")
+
 
 def join_channel(cl_sock: socket.socket, channel_name: str):
 	if channel_name[0] != '#':
 		send_msg(cl_sock, f":{hostname} 403 {clients[cl_sock]['nick']} {channel_name} :No such channel")
-		# :arsicpc 403 tadz test :No such channel
 		return
 	
 	try:
-		print(f"TRYING TO JOIN CHANNEL \"{channel_name}\"")
+		print(f"TRYING TO JOIN CHANNEL '{channel_name}'")
 		channels[channel_name].append(cl_sock)
 	except KeyError:
-		print(f"CREATING CHANNEL \"{channel_name}\"")
+		print(f"NOT FOUND, CREATING CHANNEL '{channel_name}'")
 		channels[channel_name] = [cl_sock]
 	
 	clients[cl_sock]['channels'].append(channel_name)
@@ -134,7 +142,8 @@ def join_channel(cl_sock: socket.socket, channel_name: str):
 	print(data.decode("utf-8"))
 
 	if not data or comm_contents(data.decode("utf-8"), "MODE") != channel_name:
-		if len(channels[channel_name]) == 1:
+		channels[channel_name].remove(cl_sock)
+		if len(channels[channel_name]) == 0:
 			del channels[channel_name]
 		clients[cl_sock]['channels'].remove(channel_name)
 		return
@@ -154,19 +163,7 @@ def join_channel(cl_sock: socket.socket, channel_name: str):
 	send_msg(cl_sock, f":{hostname} 366 {clients[cl_sock]['nick']} {channel_name} :End of NAMES list")
 	send_msg(cl_sock, f":{hostname} 324 {clients[cl_sock]['nick']} {channel_name} +")
 
-	data = parse_sock(cl_sock)
-	print(data.decode("utf-8"))
-
-	if not data or comm_contents(data.decode("utf-8"), "WHO") != channel_name:
-		if len(channels[channel_name]) == 1:
-			del channels[channel_name]
-		clients[cl_sock]['channels'].remove(channel_name)
-		return
-	
-	for chan_sock in channels[channel_name]:
-		send_msg(cl_sock, f":{hostname} 352 {clients[chan_sock]['nick']} {channel_name} {clients[chan_sock]['realname']} {IP} {hostname} {clients[chan_sock]['nick']} H :0 {clients[chan_sock]['realname']}")
-
-	send_msg(cl_sock, f":{hostname} 315 {clients[chan_sock]['nick']} {channel_name} :End of WHO list")
+	print(f"JOINED CHANNEL '{channel_name}'")
 
 	'''
 	<< JOIN #test
@@ -190,9 +187,51 @@ def join_channel(cl_sock: socket.socket, channel_name: str):
 	'''
 
 
-def privmsg(comm_contents: str):
+def who(cl_sock: socket.socket, channel_name: str):
+
+	for chan_sock in channels[channel_name]:
+		send_msg(cl_sock, f":{hostname} 352 {clients[cl_sock]['nick']} {channel_name} {clients[chan_sock]['realname']} {IP} {hostname} {clients[chan_sock]['nick']} H :0 {clients[chan_sock]['realname']}")
+
+	send_msg(cl_sock, f":{hostname} 315 {clients[cl_sock]['nick']} {channel_name} :End of WHO list")
+
+
+def privmsg(cl_sock: socket.socket, dest_and_msg: str):
 	pass
 
+
+def leave_channel(cl_sock: socket.socket, channel_and_comment: str):
+	channel_name = channel_and_comment[:channel_and_comment.find(' ')]
+	comment = channel_and_comment[channel_and_comment.find(':') + 1:]
+	if channel_name[0] != '#':
+		send_msg(cl_sock, f":{hostname} 403 {clients[cl_sock]['nick']} {channel_name} :No such channel")
+		return
+	
+	for chan_sock in channels[channel_name]:
+		send_msg(chan_sock, f":{clients[cl_sock]['nick']}!{clients[cl_sock]['realname']}@{IP} PART {channel_name} :{comment}")
+	
+	channels[channel_name].remove(cl_sock)
+	if len(channels[channel_name]) == 0:
+		print(f"NO USERS IN {channel_name}, DELETING")
+		del channels[channel_name]
+	clients[cl_sock]['channels'].remove(channel_name)
+	
+	'''
+	<< PART #test :Leaving
+	>> :tadz_!arsic@::1 PART #test :Leaving
+	'''
+
+
+def ping(cl_sock: socket.socket, lag_str: str):
+	send_msg(cl_sock, f":{hostname} PONG {socket.getfqdn(clients[cl_sock]['ip'])} :{lag_str}")
+	print(f":{hostname} PONG {socket.getfqdn(clients[cl_sock]['ip'])} :{lag_str}")
+
+comm_funcs = {
+	"PING": ping,
+	"JOIN": join_channel,
+	"WHO": who,
+	"PRIVMSG": privmsg,
+	"PART": leave_channel
+}
 
 while True:
 	read_sockets, _, exception_sockets = select.select(sockets_list, [], sockets_list)
@@ -211,16 +250,11 @@ while True:
 				sockets_list.remove(sock)
 				del clients[sock]
 				print(clients)
-
-			elif comm_contents(data.decode("utf-8"), "PING"):
-				send_msg(sock, f":{hostname} PONG {socket.getfqdn(clients[sock]['ip'])} :{comm_contents(data.decode('utf-8'), 'PING')}")
 			
-			elif comm_contents(data.decode("utf-8"), "PRIVMSG"):
-				privmsg(comm_contents(data.decode("utf-8"), "PRIVMSG"))
-
-			elif comm_contents(data.decode("utf-8"), "JOIN"):
-				join_channel(sock, comm_contents(data.decode("utf-8"), "JOIN"))
-
 			else:
-				user = clients[sock]
-				print(f"[{user['nick']}/{user['realname']}]: ")
+				data_str = data.decode("utf-8")
+
+				for c in comm_funcs.keys():
+					if comm_contents(data_str, c):
+						comm_funcs[c](sock, comm_contents(data_str, c))
+						break
