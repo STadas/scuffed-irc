@@ -8,12 +8,14 @@ https://ircv3.net/specs/core/capability-negotiation.html - stuff i found on CAP,
 https://stackoverflow.com/questions/5163255/regular-expression-to-match-irc-nickname - regex for nicks
 '''
 """
-TODO: check all replycodes and if their replies are done correctly; limit length of names, msg, etc.
-TODO: Line 131(ascii), 155 (ascii), 209 (topics), 237 (comm_contents), 260 (comm_contents)
+TODO: check all replycodes and if their replies are done correctly
+TODO: a bunch of channel/nick/realname validation
+TODO: topics
 """
 
 import socket
 import select
+import string
 from datetime import datetime
 from pytz import reference
 
@@ -96,6 +98,23 @@ class Client:
 				return cl
 	
 
+	# Helper function. Checks if nickname or realname is valid
+	def __checkname(self, what: str, name: str):
+		if len(name) > 9:
+			console_print(f"REJECTED {what} (too long)")
+			self.send_msg(f"{what} rejected. Must be 9 or less characters")
+			return False 
+
+		allowed_symbols = "-_[]{}\\`|" + string.ascii_letters + string.digits
+
+		try:
+			for s in name:
+				allowed_symbols.find(s)
+		except ValueError:
+			console_print(f"REJECTED {what} (invalid)")
+			self.send_msg(f"{what} rejected. Only letters, digits and -_[]" + "{}\\`| are allowed")
+			return False 
+	
 
 	# Definitions of functions by IRC commands for easier usage in the main loop
 	def comm_func(self, func: str, arg):
@@ -134,24 +153,18 @@ class Client:
 	def set_nick(self, nick: str):
 		console_print(f"NICK {nick}")
 
-		rejected_symbols = "\"`'!/\\%+-*#@$&;:,.\r\n\t [](){}" #TODO try using the ASCII library to check
-		for s in rejected_symbols:
-			if nick.find(s) != -1:
-				console_print("REJECTED nick (has any of: [!:@ *;#\"`'/\\%+-.\\r\\n\\t$,&])")
-				self.send_msg("nick rejected. (has any of: [!:@ *;#\"`'/\\%+-.\\r\\n\\t$,&])\r\nPlease pick a different nick without any of those symbols.")
-				return False
-
+		if self.__checkname("nick", nick) is False:
+			return False
+				
 		for cl in clients_list:
 			if cl.nick == nick and cl.sock != self.sock:
 				console_print("REJECTED nick (already taken)")
-				self.send_msg("nick rejected. (already taken)\r\nPlease pick a different nick")
+				self.send_msg("Nick rejected. This one is already taken. Please pick a different nick")
 				return False
 
 		self.send_msg(f":{self.nick}!{self.realname}@{SERVER_IP} NICK {nick}")
 		self.nick = nick
-
-		if self.nick != "" and self.realname != "":
-			self.__welcome()
+		self.__welcome()
 		
 		return True
 
@@ -161,17 +174,11 @@ class Client:
 		realname = data_str[data_str.find(":") + 1:]
 		console_print(f"USER {realname}")
 
-		rejected_symbols = "\"`'!/%+*#@$&;:,.\r\n\t ()" #TODO try using the ASCII library to check
-		for s in rejected_symbols:
-			if realname.find(s) != -1:
-				console_print("REJECTED realname (has any of: [\"`'!/%+*#@$&;:,.\\r\\n\\t<space>()])")
-				self.sock.send_msg("realname rejected. (has any of: [\"`'!/%+*#@$&;:,.\\r\\n\\t<space>()])\r\nPlease reconnect with a different realname without any of those symbols.")
-				return False
+		if self.__checkname("realname", realname) is False:
+			return False
 
 		self.realname = realname
-
-		if self.nick != "" and self.realname != "":
-			self.__welcome()
+		self.__welcome()
 
 		return True
 	
@@ -182,14 +189,16 @@ class Client:
 		clients_list.append(self)
 	
 
+	# Welcomes new user if nick and realname are valid
 	def __welcome(self):
-		self.send_msg(f":{HOST_NAME} 001 {self.nick} :Yo, welcome to {SERVER_NAME}.")
-		self.send_msg(f":{HOST_NAME} 002 {self.nick} :Your host is {HOST_NAME}, running VERSION {VERSION}")
-		self.send_msg(f":{HOST_NAME} 003 {self.nick} :This server was created {CREATE_TIME} {TZ_NAME}")
-		self.send_msg(f":{HOST_NAME} 251 {self.nick} :There {f'are {len(clients_list)} users' if len(clients_list) != 1 else 'is 1 user'} on the server.")
-		self.send_msg(f":{HOST_NAME} 422 {self.nick} :{MOTD}")
+		if self.nick != "" and self.realname != "":
+			self.send_msg(f":{HOST_NAME} 001 {self.nick} :Yo, welcome to {SERVER_NAME}.")
+			self.send_msg(f":{HOST_NAME} 002 {self.nick} :Your host is {HOST_NAME}, running VERSION {VERSION}")
+			self.send_msg(f":{HOST_NAME} 003 {self.nick} :This server was created {CREATE_TIME} {TZ_NAME}")
+			self.send_msg(f":{HOST_NAME} 251 {self.nick} :There {f'are {len(clients_list)} users' if len(clients_list) != 1 else 'is 1 user'} on the server.")
+			self.send_msg(f":{HOST_NAME} 422 {self.nick} :{MOTD}")
 
-		console_print(f"NEW USER '{self.nick}!{self.realname}'")
+			console_print(f"NEW USER '{self.nick}!{self.realname}'")
 	
 
 	# Adds client to a channel, creates one if it doesn't exist
@@ -237,7 +246,7 @@ class Client:
 	# Sends a message to a channel or another client
 	def privmsg(self, target_and_msg: str):
 		target = target_and_msg[:target_and_msg.find(' ')]
-		msg = target_and_msg[target_and_msg.find(':') + 1:] #TODO try to use comm_contents
+		msg = target_and_msg[target_and_msg.find(':') + 1:]
 
 		if len(bytes(msg.encode("utf-8"))) > (2 ** 10):
 			self.send_msg("No spammerino")
@@ -260,7 +269,7 @@ class Client:
 	# Removes client from channel
 	def leave_channel(self, channel_and_comment: str):
 		channel_name = channel_and_comment[:channel_and_comment.find(' ')]
-		comment = channel_and_comment[channel_and_comment.find(':') + 1:] #TODO try to use comm_contents
+		comment = channel_and_comment[channel_and_comment.find(':') + 1:]
 
 		console_print(f"LEAVING CHANNEL {channel_name}")
 
