@@ -101,7 +101,6 @@ class Client:
 
 	# Helper function. Checks if nickname or realname is valid
 	def __checkname(self, what: str, name: str):
-		print(f"length of {name} is", len(name))
 		if len(name) == 0 or len(name) > 9:
 			console_print(f"REJECTED {what} (too short/long)")
 			self.send_msg(f":{HOST_NAME} 432 {self.nick} :{what} rejected. Length must be from 1 to 9 characters")
