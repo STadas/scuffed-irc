@@ -101,6 +101,7 @@ class Client:
 
 	# Helper function. Checks if nickname or realname is valid
 	def __checkname(self, what: str, name: str):
+		print(f"length of {name} is", len(name))
 		if len(name) == 0 or len(name) > 9:
 			console_print(f"REJECTED {what} (too short/long)")
 			self.send_msg(f":{HOST_NAME} 432 {self.nick} :{what} rejected. Length must be from 1 to 9 characters")
@@ -171,7 +172,7 @@ class Client:
 
 	# Sets realname for the Client
 	def set_realname(self, data_str: str):
-		realname = data_str[data_str.find(":") + 1:]
+		realname = data_str[data_str.rfind(":") + 1:]
 		console_print(f"USER {realname}")
 
 		if self.__checkname("realname", realname) is False:
