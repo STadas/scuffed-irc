@@ -1,15 +1,12 @@
-'''
+"""
 https://tools.ietf.org/html/rfc2810 - general architecture
 https://tools.ietf.org/html/rfc2812 - client/server comms
 https://docs.python.org/3.9/howto/sockets.html - python socket docs
 https://medium.com/python-pandemonium/python-socket-communication-e10b39225a4c - tutorial 1
 https://realpython.com/python-sockets/ - tutorial 2
-https://ircv3.net/specs/core/capability-negotiation.html - stuff i found on CAP, the initial command, though most likely wont matter
+https://ircv3.net/specs/core/capability-negotiation.html - stuff i found on CAP, the initial command, though most likely wont matter (mostly didnt)
 https://stackoverflow.com/questions/5163255/regular-expression-to-match-irc-nickname - regex for nicks
-'''
-"""
-TODO: check all replycodes and if their replies are done correctly
-TODO: a bunch of channel/nick/realname validation
+--------------------------------------------------------------------------------
 TODO: topics
 """
 
@@ -29,10 +26,10 @@ except:
 today = datetime.now()
 TZ_NAME = reference.LocalTimezone().tzname(today)
 CREATE_TIME = today.strftime("%Y-%m-%d, %H:%M:%S")
-HOST_NAME = "the-inn"
-VERSION = "0.1"
+HOST_NAME = "the-inn" #servername, host
+VERSION = "0.2"
 SERVER_NAME = "Yulgar's Inn"
-SERVER_IP = "::1"
+SERVER_IP = "::1" #host, hostaddr
 PORT = 6667
 
 SERV_SOCK = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
@@ -42,7 +39,8 @@ SERV_SOCK.listen(5)
 SERV_SOCK.setblocking(False)
 
 sockets_list = [SERV_SOCK]
-clients_list = []
+clients_list = set()
+bots_list = set()
 channels_dict = {}
 
 print("\033[1;36mServer started.")
@@ -71,13 +69,15 @@ def comm_contents(data_str: str, comm_str: str, to_str: str = '\r') -> str:
 
 class Client:
 	# Initialises Client with: client socket, nick, realname, ip, channels
-	def __init__(self, sock: socket.socket, nick: str, realname: str, addr: tuple, channels: [], welcome: bool):
+	def __init__(self, sock: socket.socket, nick: str, realname: str, addr: tuple, channels: [], welcome: bool, bot: bool = False, desc: str = ""):
 		self.sock = sock
 		self.nick = nick
 		self.realname = realname
 		self.addr = addr
-		self.channels = []
+		self.channels = set()
 		self.welcome = welcome
+		self.bot = bot
+		self.desc = desc
 		self.func_names = {
 			"PING": self.ping,
 			"JOIN": self.join_channel,
@@ -86,6 +86,7 @@ class Client:
 			"PART": self.leave_channel,
 			"NICK": self.set_nick,
 			"USER": self.set_realname,
+			"SERVICE": self.service,
 			"QUIT": self.leave_server
 		}
 
@@ -100,9 +101,9 @@ class Client:
 
 	# Helper function. Checks if nickname or realname is valid
 	def __checkname(self, what: str, name: str):
-		if len(name) > 9:
-			console_print(f"REJECTED {what} (too long)")
-			self.send_msg(f"{what} rejected. Must be 9 or less characters")
+		if len(name) == 0 or len(name) > 9:
+			console_print(f"REJECTED {what} (too short/long)")
+			self.send_msg(f":{HOST_NAME} 432 {self.nick} :{what} rejected. Length must be from 1 to 9 characters")
 			return False 
 
 		allowed_symbols = "-_[]{}\\`|" + string.ascii_letters + string.digits
@@ -112,14 +113,13 @@ class Client:
 				allowed_symbols.find(s)
 		except ValueError:
 			console_print(f"REJECTED {what} (invalid)")
-			self.send_msg(f"{what} rejected. Only letters, digits and -_[]" + "{}\\`| are allowed")
+			self.send_msg(f":{HOST_NAME} 432 {self.nick} :{what} rejected. Only letters, digits and " + "-_[]{}\\`| are allowed")
 			return False 
 	
 
 	# Definitions of functions by IRC commands for easier usage in the main loop
 	def comm_func(self, func: str, arg):
-		func_names = self.func_names
-		return func_names[func](arg)
+		return self.func_names[func](arg)
 	
 
 	# Receives and parses message(s)/command(s) from client socket
@@ -159,10 +159,10 @@ class Client:
 		for cl in clients_list:
 			if cl.nick == nick and cl.sock != self.sock:
 				console_print("REJECTED nick (already taken)")
-				self.send_msg("Nick rejected. This one is already taken. Please pick a different nick")
+				self.send_msg(f":{HOST_NAME} 433 {self.nick} :Nick rejected. This one is already taken. Please pick a different nick")
 				return False
 
-		self.send_msg(f":{self.nick}!{self.realname}@{SERVER_IP} NICK {nick}")
+		self.send_msg(f":{self.nick}!{self.realname}@{HOST_NAME} NICK {nick}")
 		self.nick = nick
 		self.__welcome()
 		
@@ -186,24 +186,29 @@ class Client:
 	# Adds new client to clients list and sends appropriate messaging
 	def add(self):
 		sockets_list.append(self.sock)
-		clients_list.append(self)
+		clients_list.add(self)
 	
 
 	# Welcomes new user if nick and realname are valid
 	def __welcome(self):
-		if self.nick != "" and self.realname != "":
-			self.send_msg(f":{HOST_NAME} 001 {self.nick} :Yo, welcome to {SERVER_NAME}.")
+		if (self.bot or self.realname != "") and self.nick != "": 
+			if self.bot: self.send_msg(f":{HOST_NAME} 383 {self.nick} :You are service {self.nick}")
+			else: self.send_msg(f":{HOST_NAME} 001 {self.nick} :Yo, welcome to {SERVER_NAME} {self.nick}!{self.realname}@{HOST_NAME}")
 			self.send_msg(f":{HOST_NAME} 002 {self.nick} :Your host is {HOST_NAME}, running VERSION {VERSION}")
 			self.send_msg(f":{HOST_NAME} 003 {self.nick} :This server was created {CREATE_TIME} {TZ_NAME}")
-			self.send_msg(f":{HOST_NAME} 251 {self.nick} :There {f'are {len(clients_list)} users' if len(clients_list) != 1 else 'is 1 user'} on the server.")
+			self.send_msg(f":{HOST_NAME} 004 {self.nick} :{HOST_NAME} {VERSION}")
+			cl_count = len(clients_list)
+			bot_count = len(bots_list)
+			self.send_msg(f":{HOST_NAME} 251 {self.nick} :There {f'are {cl_count} users' if cl_count != 1 else 'is 1 user'} and {f'{bot_count} services' if bot_count != 1 else '1 service'} on the server.")
 			self.send_msg(f":{HOST_NAME} 422 {self.nick} :{MOTD}")
 
-			console_print(f"NEW USER '{self.nick}!{self.realname}'")
+		console_print(f"NEW {f'SERVICE {self.nick}' if self.bot else f'CLIENT {self.nick}!{self.realname}'}")
 	
 
 	# Adds client to a channel, creates one if it doesn't exist
 	def join_channel(self, channel_name: str):
-		if channel_name[0] != '#':
+		allowed_symbols = "-_[]{}\\`|#&+!" + string.ascii_letters + string.digits
+		if channel_name[0] != '#' or any(c not in allowed_symbols for c in channel_name) or len(channel_name) > 9:
 			self.send_msg(f":{HOST_NAME} 403 {self.nick} {channel_name} :No such channel")
 			return
 		
@@ -214,9 +219,9 @@ class Client:
 			console_print(f"NOT FOUND, CREATING CHANNEL '{channel_name}'")
 			channels_dict[channel_name] = [self]
 		
-		self.channels.append(channel_name)
+		self.channels.add(channel_name)
 		for chan_cl in channels_dict[channel_name]:
-			chan_cl.send_msg(f":{self.nick}!{self.realname}@{SERVER_IP} JOIN {channel_name}")
+			chan_cl.send_msg(f":{self.nick}!{self.realname}@{HOST_NAME} JOIN {channel_name}")
 
 		self.send_msg(f":{HOST_NAME} 331 {self.nick} {channel_name} :No topic") #TODO topics
 		
@@ -238,32 +243,39 @@ class Client:
 	# Responds to WHO command from the client, sends vebose list of clients in the channel
 	def who(self, channel_name: str):
 		for chan_cl in channels_dict[channel_name]:
-			self.send_msg(f":{HOST_NAME} 352 {self.nick} {channel_name} {self.realname} {self.addr[0]} {HOST_NAME} {chan_cl.nick} H :0 {chan_cl.realname}")
+			self.send_msg(f":{HOST_NAME} 352 {self.nick} {channel_name} {chan_cl.realname} {HOST_NAME} {HOST_NAME} {chan_cl.nick} H :0 {chan_cl.realname}")
 
 		self.send_msg(f":{HOST_NAME} 315 {self.nick} {channel_name} :End of WHO list")
 
 
 	# Sends a message to a channel or another client
-	def privmsg(self, target_and_msg: str):
+	def privmsg(self, target_and_msg: str, notice: bool = False):
+		allowed_symbols = "-_[]{}\\`|" + string.ascii_letters + string.digits
 		target = target_and_msg[:target_and_msg.find(' ')]
 		msg = target_and_msg[target_and_msg.find(':') + 1:]
 
-		if len(bytes(msg.encode("utf-8"))) > (2 ** 10):
-			self.send_msg("No spammerino")
+		if target[0] == '#' and any(c not in allowed_symbols + "#&+!" for c in target):
+			self.send_msg(f":{HOST_NAME} 403 {self.nick} {target} :No such channel")
+			return
+		if any(c not in allowed_symbols for c in target):
+			self.send_msg(f":{HOST_NAME} 401 {self.nick} {target} :No such user")
 			return
 
 		if target[0] != '#':
 			for priv_cl in clients_list:
 				if priv_cl.nick == target:
-					priv_cl.send_msg(f":{self.nick}!{self.realname}@{SERVER_IP} PRIVMSG {target} :{msg}")
+					priv_cl.send_msg(f":{self.nick}!{self.realname}@{HOST_NAME} PRIVMSG {target} :{msg}")
 					return
-			self.send_msg(f":{HOST_NAME} 403 {self.nick} {target} :No such channel or user")
+			self.send_msg(f":{HOST_NAME} 401 {self.nick} {target} :No such user")
 
 		else:
+			if target not in self.channels:
+				self.send_msg(f":{HOST_NAME} 403 {self.nick} {target} :No such channel")
+				return
 			for chan_cl in channels_dict[target]:
 				if chan_cl.sock == self.sock:
 					continue
-				chan_cl.send_msg(f":{self.nick}!{self.realname}@{SERVER_IP} PRIVMSG {target} :{msg}")
+				chan_cl.send_msg(f":{self.nick}!{self.realname}@{HOST_NAME} PRIVMSG {target} :{msg}")
 
 
 	# Removes client from channel
@@ -279,7 +291,7 @@ class Client:
 			return
 		
 		for chan_cl in channels_dict[channel_name]:
-			chan_cl.send_msg(f":{self.nick}!{self.realname}@{SERVER_IP} PART {channel_name} :{comment}")
+			chan_cl.send_msg(f":{self.nick}!{self.realname}@{HOST_NAME} PART {channel_name} :{comment}")
 		
 		channels_dict[channel_name].remove(self)
 		if len(channels_dict[channel_name]) == 0:
@@ -288,8 +300,18 @@ class Client:
 		self.channels.remove(channel_name)
 			
 	
+	# Responds to a ping from the client
 	def ping(self, lag_str: str):
 		self.send_msg(f":{HOST_NAME} PONG {socket.getfqdn(self.addr[0])} :{lag_str}")
+
+
+	def service(self, params: str):
+		nick = params[:params.find(" ")]
+		desc = params[params.find(":") + 1:]
+
+		if self.set_nick(nick):
+			self.desc = desc
+			bots_list.add(self)
 
 
 	def leave_server(self, comment: str):
@@ -298,7 +320,7 @@ class Client:
 		for chan_name in list(self.channels):
 			self.comm_func("PART", f"{chan_name} :{comment}")
 		
-		self.send_msg(f":{self.nick}!{self.realname}@{SERVER_IP} QUIT :{comment}")
+		self.send_msg(f":{self.nick}!{self.realname}@{HOST_NAME} QUIT :{comment}")
 		
 		sockets_list.remove(self.sock)
 		clients_list.remove(self)
