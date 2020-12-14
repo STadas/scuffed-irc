@@ -257,7 +257,7 @@ class Client:
 		if target[0] == '#' and any(c not in allowed_symbols + "#&+!" for c in target):
 			self.send_msg(f":{HOST_NAME} 403 {self.nick} {target} :No such channel")
 			return
-		if any(c not in allowed_symbols for c in target):
+		if target[0] != '#' and any(c not in allowed_symbols for c in target):
 			self.send_msg(f":{HOST_NAME} 401 {self.nick} {target} :No such user")
 			return
 
