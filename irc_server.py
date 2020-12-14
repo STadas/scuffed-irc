@@ -171,7 +171,7 @@ class Client:
 
 	# Sets realname for the Client
 	def set_realname(self, data_str: str):
-		realname = data_str[data_str.find(":") + 1:]
+		realname = data_str[data_str.rfind(":") + 1:]
 		console_print(f"USER {realname}")
 
 		if self.__checkname("realname", realname) is False:
