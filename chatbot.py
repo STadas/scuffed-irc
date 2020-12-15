@@ -20,3 +20,5 @@ while True:
         irc.send(channel, "Hah you're gay!" + botnick)
     if "!gay" in text and channel:
         irc.send(channel, "No u")
+    if "!slap" in text and channel:
+        irc.send(channel, "I slap thee " + botnick)
