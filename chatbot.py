@@ -16,7 +16,7 @@ while True:
     text = irc.get_response()
     print(text)
  
-    if "!PRIVMSG" in text and channel in text and "hello" in text:
-        irc.send(channel, "Hello!")
+    if "!hello" in text and channel in text:
+        irc.send(channel, "Hah you're gay!" + botnick)
     if "!gay" in text and channel:
         irc.send(channel, "No u")
