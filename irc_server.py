@@ -29,7 +29,7 @@ CREATE_TIME = today.strftime("%Y-%m-%d, %H:%M:%S")
 HOST_NAME = "the-inn" #servername, host
 VERSION = "0.2"
 SERVER_NAME = "Yulgar's Inn"
-SERVER_IP = "::1" #host, hostaddr
+SERVER_IP = "" #host, hostaddr
 PORT = 6667
 
 SERV_SOCK = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
