@@ -14,11 +14,14 @@ irc.connect(server, port, channel, botnick, botpass, botnickpass)
 
 while True:
     text = irc.get_response()
-    print(text)
- 
+    print("~" + text + "~")
+
     if "!hello" in text and channel in text:
         irc.send(channel, "Hah you're gay!" + botnick)
     if "!gay" in text and channel:
         irc.send(channel, "No u")
     if "!slap" in text and channel:
-        irc.send(channel, "I slap thee " + botnick)
+        irc.send(channel, text[1:text.find("!")] + " slaps " + botnick)
+    if "!rndName" in text and channel:
+        irc.send(channel, " is the lucky user")
+
