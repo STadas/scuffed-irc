@@ -254,6 +254,9 @@ class Client:
 		target = target_and_msg[:target_and_msg.find(' ')]
 		msg = target_and_msg[target_and_msg.find(':') + 1:]
 
+		if target == "":
+			self.send_msg(f":{HOST_NAME} 403 {self.nick} {target} :No such channel")
+			return
 		if target[0] == '#' and any(c not in allowed_symbols + "#&+!" for c in target):
 			self.send_msg(f":{HOST_NAME} 403 {self.nick} {target} :No such channel")
 			return
