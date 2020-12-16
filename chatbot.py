@@ -1,9 +1,10 @@
 from irc_class import *
 import os
 import random
+import time
 
 ## IRC Config
-server = socket.gethostname() # Provide a valid server IP/Hostname
+server = "::1" # Provide a valid server IP/Hostname
 port = 6667
 channel = "#1"
 botnick = "scuffbot"
@@ -23,5 +24,7 @@ while True:
     if "!slap" in text and channel:
         irc.send(channel, text[1:text.find("!")] + " slaps " + botnick)
     if "!rndName" in text and channel:
+        irc.who(channel)
+        time.sleep(1)
         irc.send(channel, " is the lucky user")
 
