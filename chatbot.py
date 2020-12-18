@@ -19,8 +19,6 @@ with open('fish.csv', 'r') as file:
     fish = list(reader)[0]
 
 while True:
-    if irc is None:
-        continue
     text = irc.get_response()
     print("~" + text + "~")
     if text:
