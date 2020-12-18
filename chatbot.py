@@ -43,8 +43,9 @@ def commands(text):
         elif messageText == "!slap":
             print(text.split())
             slapper = text[1:text.find("!")]  # find out the slapper
-            slappee = random.choice(users) if len(
-            users) > 0 else "...themselves (maybe invite a friend to slap next time)"
+            slappee = slapper
+            while slappee==slapper:
+                slappee = random.choice(users) if len( users) > 1 else "...themselves (maybe invite a friend to slap next time)"
             irc.send(channel, "* {} slaps {} *".format(slapper, slappee))
 
 def parseMessages(input):
