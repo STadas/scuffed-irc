@@ -27,7 +27,7 @@ while True:
         if "!hello" in text and channel in text:
             irc.send(channel, "Hah you're gay!" + botnick)
         if "!fish" in text and channel:
-            irc.send(channel, random.choice(fish))
+            irc.send(channel, "back in my day " + random.choice(fish) + " was the prize catch")
         if "!slap" in text and channel:
             irc.who(channel) # request information on potential slapper and slappee's
             slapper = text[1:text.find("!")]  # find out the slapper
