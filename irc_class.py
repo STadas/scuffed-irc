@@ -31,8 +31,6 @@ class IRC:
         self.irc.send(bytes("JOIN " + channel + "\n", "UTF-8"))
 
     def get_response(self):
-        time.sleep(1)
-        # Get the response
         resp = self.irc.recv(2040).decode("UTF-8")
 
         if resp[:4] == "PING":

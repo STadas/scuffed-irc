@@ -34,7 +34,8 @@ while True:
             cur = irc.get_response()  # get the information on potential slapper and slappee's
             userlist = list(map(lambda x: x.split()[7], list(filter(lambda x: len(x.split(
             )) == 11 and x.split()[7] != botnick and x.split()[7] != slapper, cur.split("\n")))))
-            irc.send(channel, "* {} slaps {} *".format(slapper, random.choice(userlist)))
+            slappee =  random.choice(userlist) if len(userlist)>0 else "...themselves (maybe invite a friend to slap next time)"
+            irc.send(channel, "* {} slaps {} *".format(slapper,slappee))
     else:
         time.sleep(2)
         print("reconnecting")
