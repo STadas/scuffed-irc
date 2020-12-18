@@ -9,7 +9,7 @@ class IRC:
     def __init__(self):
         # Define the socket
         self.irc = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-
+        #self.irc = socket.socket(socket.AF_INET, socket.SOCK_STREAM) #TODO: remove , for testing purposes
     def send(self, channel, msg):
         # Transfer data
         self.irc.send(bytes("PRIVMSG " + channel + " :" + msg + "\n", "UTF-8"))
@@ -25,7 +25,7 @@ class IRC:
         self.irc.send(bytes("USER " + botnick + " " + botnick +" " + botnick + " :python\n", "UTF-8"))
         self.irc.send(bytes("NICK " + botnick + "\n", "UTF-8"))
         self.irc.send(bytes("NICKSERV IDENTIFY " + botnickpass + " " + botpass + "\n", "UTF-8"))
-        time.sleep(5)
+        time.sleep(1)
 
         # join the channel
         self.irc.send(bytes("JOIN " + channel + "\n", "UTF-8"))
@@ -35,7 +35,7 @@ class IRC:
         # Get the response
         resp = self.irc.recv(2040).decode("UTF-8")
 
-        if resp.find('PING') != -1:
-            self.irc.send(bytes('PONG ' + resp.split().decode("UTF-8") [1] + '\r\n', "UTF-8")) 
+        if resp[:4] == "PING":
+            self.irc.send(bytes('PONG ' + resp.split()[1] + '\r\n', "UTF-8")) 
 
         return resp
