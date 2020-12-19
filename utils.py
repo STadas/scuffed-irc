@@ -1,8 +1,8 @@
-def console_print(msg: str):
+def consolePrint(msg: str):
 	print("\033[1;33m////\033[0m", msg)
 
 
-def comm_contents(data_str: str, comm_str: str, to_str: str = '\r') -> str:
+def commContents(data_str: str, comm_str: str, to_str: str = '\r') -> str:
 	if data_str.find(comm_str) == -1:
 		return False
 	
