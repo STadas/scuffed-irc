@@ -14,9 +14,15 @@ botpass = "<%= @guido_password %>"
 irc = None
 fish = list()
 users = list()
+facts = list()
 with open('fish.csv', 'r') as file:
     reader = csv.reader(file)
     fish = list(reader)[0]
+
+with open('facts.csv','r') as file:
+    reader = csv.reader(file)
+    facts = list(reader)[0]
+
 
 def commands(text):
     global users
@@ -32,7 +38,12 @@ def commands(text):
         if messageNick != botnick:
             users.append(messageNick)
     if len(split) == 4 and "PRIVMSG" == split[1] and botnick == split[2]:  # private message
-        irc.send(messageNick, random.choice(fish))
+        messageText = split[3][1:]
+        if messageText == "!fact":
+            print(text.split())
+            receiver = text[1:text.find("!")]
+            fact = random.choice(facts)
+            irc.send(receiver, "* Enjoy your fact: {} *".format(fact))
     if len(split) == 4 and "PRIVMSG" == split[1] and channel == split[2] and split[3][0] == ':': # normal message
         messageText = split[3][1:]
         if messageText == "!hello":
@@ -54,6 +65,13 @@ def commands(text):
                 slappee = random.choice(users) if len(users) > 1 else "...themselves"
             weapon = random.choice(fish)
             irc.send(channel, "* {} slaps {} with a {} *".format(slapper,slappee,weapon))
+        elif messageText == "!sock":
+            print(text.split())
+            slapper = text[1:text.find("!")] # finds out the slapper
+            slappee = slapper
+            while slappee == slapper:
+                slappee = random.choice(users) if len(users) > 1 else "...themselves"
+            irc.send(channel, "* {} slaps {} with a sock *".format(slapper,slappee))
 def parseMessages(input):
     if input:
         print(input)
