@@ -29,7 +29,7 @@ CREATE_TIME = f"{today.strftime('%Y-%m-%d, %H:%M:%S')} {reference.LocalTimezone(
 HOST_NAME = "the-inn"
 VERSION = "0.3"
 SERVER_NAME = "Yulgar's Inn"
-SERVER_IP = "localhost"
+SERVER_IP = "::"
 PORT = 6667
 
 SERV_SOCK = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
@@ -38,12 +38,13 @@ SERV_SOCK.bind((SERVER_IP, PORT))
 SERV_SOCK.listen(30)
 SERV_SOCK.setblocking(False)
 
-SOCKETS_LIST = [SERV_SOCK]
+SOCKETS = [SERV_SOCK]
 CLIENTS = []
 BOTS = []
 CHANNELS = {}
 
 ALLOWED_NAME_CHARS = "-_[]{}\\`|" + string.ascii_letters + string.digits
+ALLOWED_CHAN_CHARS = ALLOWED_NAME_CHARS + "#&+!"
 
 print("\033[1;36mServer started.")
 print("Current time:", CREATE_TIME)
@@ -51,12 +52,12 @@ print(f"Listening on [{SERVER_IP}]:{PORT}\033[0m")
 
 
 class Client:
-	# Initialises Client
-	def __init__(self, sock: socket.socket, nick: str, realname: str, addr: tuple, bot: bool = False, bot_desc: str = ""):
+	# Initialise the Client class
+	def __init__(self, sock: socket.socket, nick: str, realname: str, ip: str, bot: bool = False, bot_desc: str = ""):
 		self.sock = sock
 		self.nick = nick
 		self.realname = realname
-		self.addr = addr
+		self.ip = ip
 		self.channel_names = set()
 		self.bot = bot
 		self.bot_desc = bot_desc
@@ -75,7 +76,7 @@ class Client:
 
 
 	@staticmethod
-	# Finds client by socket or name, returns None if not found
+	# Find client by socket or name, returns None if not found
 	def findClient(query):
 		if type(query) == socket.socket:
 			for cl in CLIENTS:
@@ -88,7 +89,7 @@ class Client:
 		return None
 	
 
-	# Checks if nickname or realname is valid
+	# Check if nickname or realname is valid
 	def __checkName(self, what: str, name: str):
 		error = ""
 		if not 0<len(name)<=9:
@@ -103,7 +104,7 @@ class Client:
 			return False
 	
 
-	# Welcomes new user if nick and realname are valid or if nick is valid and the client is a bot
+	# Welcome new user if nick and realname are valid or if nick is valid and the client is a bot
 	def __welcomeClient(self):
 		if not self.welcome_done and (self.bot or self.realname != "") and self.nick != "": 
 			if self.bot: 
@@ -117,44 +118,67 @@ class Client:
 			cl_count_str = f'are {cl_count} users' if cl_count != 1 else 'is 1 user'
 			bot_count_str = f'{bot_count} services' if bot_count != 1 else '1 service'
 
-			self.sendMsg(f"Your host is {HOST_NAME}, running VERSION {VERSION}", "002")
+			self.sendMsg(f"Your host is {HOST_NAME}, running version {VERSION}", "002")
 			self.sendMsg(f"This server was created {CREATE_TIME}", "003")
 			self.sendMsg(f"{HOST_NAME} {VERSION}", "004")
 			self.sendMsg(f"There {cl_count_str} and {bot_count_str} on the server.", "251")
 			self.sendMsg(MOTD, "422")
 
+			# make sure the welcome message is sent only once
 			self.welcome_done = True
+
 			consolePrint(f"NEW {f'SERVICE {self.nick}' if self.bot else f'CLIENT {self.nick}!{self.realname}'}")
 	
 
-	# Returns function by IRC command name for ease of use
-	def commFunc(self, func: str, arg):
-		return self.func_names[func](arg)
+	# Send names list
+	def __sendNamesList(self, chan_name: str):
+		# limit names list response to no more than 40 characters per line for better log readability
+		nick_buffer = ""
+		for chan_cl in CHANNELS[chan_name]:
+			nick_buffer += chan_cl.nick + " "
+			if len(nick_buffer) >= 32:
+				self.sendMsg(nick_buffer[:-1], "353", [f"= {chan_name}"])
+				nick_buffer = ""
+		if len(nick_buffer) > 0:
+			self.sendMsg(nick_buffer[:-1], "353", [f"= {chan_name}"])
+			
+		self.sendMsg("End of NAMES list", "366", [chan_name])
 	
 
-	# Receives and parses message(s)/command(s) from client socket
+	# Return function by IRC command name for ease of use
+	def commFunc(self, func: str, arg):
+		if func in self.func_names.keys():
+			return self.func_names[func](arg)
+		else: return False
+	
+
+	# Receive and parse message(s)/command(s) from client socket
 	def parseData(self) -> bytes:
 		try:
 			data = self.sock.recv(2 ** 20)
 			if len(data) != 0:
 				print("\033[1;32m>>\033[0m", f"\033[37m{data}\033[0m")
+				return data
 			else:
 				return False
-		except BrokenPipeError: # thank u vincent
+		except BrokenPipeError:
 			return False
 		except ConnectionResetError:
 			return False
-		return data
 
 
-	# Sends message(s)/commmand(s) to client socket
+	# Send message(s)/commmand(s) to client socket
 	def sendMsg(self, msg: str, replycode: str = None, args: list = []):
 		try:
 			if replycode is not None:
-				msg = f":{HOST_NAME} {replycode} {self.nick} {' '.join(args)} :{msg}"
+				if len(args) == 0 or args[0] != self.nick:
+					args.insert(0, self.nick)
+				msg = f":{HOST_NAME} {replycode} {' '.join(args)} :{msg}"
+
 			msg = bytes((msg + ("\r\n" if msg[len(msg)-2:] != "\r\n" else "")).encode("utf-8"))
 			print("\033[1;31m<<\033[0m", f"\033[37m{msg}\033[0m")
 			self.sock.sendall(msg)
+
 		except BrokenPipeError:
 			consolePrint("FAILED TO SEND")
 		except ConnectionResetError:
@@ -163,14 +187,16 @@ class Client:
 			consolePrint("UNEXPECTED ERROR")
 
 
-	# Sets nick for the Client
+	# Set nick for the Client
 	def setNick(self, nick: str):
 		consolePrint(f"NICK {nick}")
 
 		if self.__checkName("nick", nick) is False:
 			return False
-				
-		if self.findClient(nick) is not None and self.findClient(nick) != self.sock:
+
+		# checks if nick is taken
+		found_client = self.findClient(nick)
+		if found_client is not None and found_client.sock != self.sock:
 			consolePrint("REJECTED nick (already taken)")
 			self.sendMsg(f"Nick rejected. This one is already taken", "433")
 			return False
@@ -182,7 +208,7 @@ class Client:
 		return True
 
 
-	# Sets realname for the Client
+	# Set realname for the Client
 	def setRealname(self, data_str: str):
 		realname = data_str[data_str.rfind(":") + 1:]
 		consolePrint(f"USER {realname}")
@@ -196,58 +222,47 @@ class Client:
 		return True
 	
 
-	# Adds new client to clients list and sends appropriate messaging
+	# Add new socket and client to lists
 	def addClient(self):
-		SOCKETS_LIST.append(self.sock)
+		SOCKETS.append(self.sock)
 		CLIENTS.append(self)
 	
 
-	# Adds client to a channel, creates one if it doesn't exist
-	def joinChannel(self, channel_name: str):
-		allowed_symbols = "-_[]{}\\`|#&+!" + string.ascii_letters + string.digits
-		if channel_name[0] != '#' or any(c not in allowed_symbols for c in channel_name) or len(channel_name) > 9:
-			self.sendMsg("No such channel", "403", [channel_name])
+	# Add client to a channel, create one if it doesn't exist
+	def joinChannel(self, chan_name: str):
+		if chan_name[0] not in "&+!#" or any(c not in ALLOWED_CHAN_CHARS for c in chan_name) or len(chan_name) > 9:
+			self.sendMsg("Bad channel name. Only letters, digits and -_[]{}\\`|&+!# allowed. Must also start with any of &+!#.", "403", [chan_name])
 			return
 		
-		try:
-			consolePrint(f"TRYING TO JOIN CHANNEL '{channel_name}'")
-			CHANNELS[channel_name].append(self)
-		except KeyError:
-			consolePrint(f"NOT FOUND, CREATING CHANNEL '{channel_name}'")
-			CHANNELS[channel_name] = [self]
-		
-		self.channel_names.add(channel_name)
-		for chan_cl in CHANNELS[channel_name]:
-			chan_cl.sendMsg(f":{self.nick}!{self.realname}@{HOST_NAME} JOIN {channel_name}")
+		# if channel exists, add client; if not, create channel with client
+		consolePrint(f"{self.nick} TRYING TO JOIN CHANNEL {chan_name}")
+		if chan_name in CHANNELS.keys():
+			CHANNELS[chan_name].append(self)
+		else:
+			consolePrint(f"CREATING CHANNEL {chan_name}")
+			CHANNELS[chan_name] = [self]
+		self.channel_names.add(chan_name) # update the client's channel list
 
-		self.sendMsg("No topic", "331", [channel_name])
-		
-		nick_buffer = ""
-		for chan_cl in CHANNELS[channel_name]:
-			if len(nick_buffer) > 32:
-				self.sendMsg(nick_buffer, "353", [f"= {channel_name}"])
-				nick_buffer = ""
-			nick_buffer += chan_cl.nick + " "
-		if len(nick_buffer) > 0:
-			self.sendMsg(nick_buffer, "353", [f"= {channel_name}"])
-			
-		self.sendMsg("End of NAMES list", "366", [channel_name])
+		# announce in the channel that the client has joined
+		for chan_cl in CHANNELS[chan_name]:
+			chan_cl.sendMsg(f":{self.nick}!{self.realname}@{HOST_NAME} JOIN {chan_name}")
 
-		consolePrint(f"JOINED CHANNEL '{channel_name}'")
+		self.sendMsg("No topic", "331", [chan_name]) #TODO: channel topics
+		self.__sendNamesList(chan_name)
+		consolePrint(f"JOINED CHANNEL {chan_name}")
 		
 	
-	# Responds to WHO command from the client, sends vebose list of clients in the channel
-	def whoChannel(self, channel_name: str):
-		for chan_cl in CHANNELS[channel_name]:
-			args = [channel_name, chan_cl.realname, HOST_NAME, HOST_NAME, chan_cl.nick, "H"]
+	# Send verbose list of clients in the channel
+	def whoChannel(self, chan_name: str):
+		for chan_cl in CHANNELS[chan_name]:
+			args = [chan_name, chan_cl.realname, HOST_NAME, HOST_NAME, chan_cl.nick, "H"]
 			self.sendMsg(f"0 {chan_cl.realname}", "352", args)
 
-		self.sendMsg("End of WHO list", "315", [channel_name])
+		self.sendMsg("End of WHO list", "315", [chan_name])
 
 
-	# Sends a message to a channel or another client
+	# Send a message to a channel or another client
 	def privmsgTarget(self, target_and_msg: str, notice: bool = False):
-		allowed_symbols = "-_[]{}\\`|" + string.ascii_letters + string.digits
 		target = target_and_msg[:target_and_msg.find(' ')]
 		msg = target_and_msg[target_and_msg.find(':') + 1:]
 
@@ -255,7 +270,7 @@ class Client:
 			return
 
 		if target[0] in "&+!#":
-			if target not in self.channel_names or any(c not in allowed_symbols + "#&+!" for c in target):
+			if target not in self.channel_names or any(c not in ALLOWED_CHAN_CHARS for c in target):
 				self.sendMsg("No such channel", "403", [target])
 				return
 			for chan_cl in CHANNELS[target]:
@@ -264,41 +279,46 @@ class Client:
 				chan_cl.sendMsg(f":{self.nick}!{self.realname}@{HOST_NAME} PRIVMSG {target} :{msg}")
 		else:
 			recipient = self.findClient(target)
-			if any(c not in allowed_symbols for c in target) or recipient not in CLIENTS:
+			if any(c not in ALLOWED_NAME_CHARS for c in target) or recipient not in CLIENTS:
 				self.sendMsg("No such user", "401", [target])
 				return
-
+			# if recipient.sock == self.sock:
+			# 	return
+			# yes, you can message yourself. this is intentional, not everyone has friends :(
+			
 			recipient.sendMsg(f":{self.nick}!{self.realname}@{HOST_NAME} PRIVMSG {target} :{msg}")
 			
 
-
-	# Removes client from channel
+	# Remove client from channel
 	def partChannel(self, channel_and_comment: str):
-		channel_name = channel_and_comment[:channel_and_comment.find(' ')]
+		chan_name = channel_and_comment[:channel_and_comment.find(' ')]
 		comment = channel_and_comment[channel_and_comment.find(':') + 1:]
 
-		consolePrint(f"LEAVING CHANNEL {channel_name}")
+		consolePrint(f"{self.nick} LEAVING CHANNEL {chan_name}")
 
-		if channel_name[0] not in '&+!#' or channel_name not in self.channel_names:
-			consolePrint(f"CANT FIND CHANNEL {channel_name}")
-			self.sendMsg("No such channel", "403", [channel_name])
+		if chan_name not in self.channel_names:
+			consolePrint(f"CANT FIND CHANNEL {chan_name}")
+			self.sendMsg("No such channel", "403", [chan_name])
 			return
 		
-		for chan_cl in CHANNELS[channel_name]:
-			chan_cl.sendMsg(f":{self.nick}!{self.realname}@{HOST_NAME} PART {channel_name} :{comment}")
+		# announce in the channel that the client has left
+		for chan_cl in CHANNELS[chan_name]:
+			chan_cl.sendMsg(f":{self.nick}!{self.realname}@{HOST_NAME} PART {chan_name} :{comment}")
 		
-		self.channel_names.remove(channel_name)
-		CHANNELS[channel_name].remove(self)
-		if len(CHANNELS[channel_name]) == 0:
-			consolePrint(f"NO USERS IN '{channel_name}', DELETING")
-			del CHANNELS[channel_name]
+		# clean up appropriate datasets
+		self.channel_names.remove(chan_name)
+		CHANNELS[chan_name].remove(self)
+		if len(CHANNELS[chan_name]) == 0:
+			consolePrint(f"NO CLIENTS IN {chan_name}, DELETING")
+			del CHANNELS[chan_name]
 			
 	
-	# Responds to a ping from the client
+	# Respond to a ping from the client
 	def pongClient(self, lag_str: str):
-		self.sendMsg(f":{HOST_NAME} PONG {socket.getfqdn(self.addr[0])} :{lag_str}")
+		self.sendMsg(f":{HOST_NAME} PONG {self.ip} :{lag_str}")
 
 
+	# Set client as service/bot
 	def serviceClient(self, params: str):
 		nick = params[:params.find(" ")]
 		desc = params[params.find(":") + 1:]
@@ -307,20 +327,21 @@ class Client:
 			self.bot_desc = desc
 			self.bot = True
 			BOTS.append(self)
-		
-		self.__welcomeClient()
+			self.__welcomeClient()
 
 
-	def quitServer(self, comment: str):
-		consolePrint(f"CLOSE connection from {self.addr}")
+	def quitServer(self, comment: str = ":Leaving"):
+		consolePrint(f"CLOSE connection from {self.ip}")
 		comment = comment[comment.find(":") + 1:]
 
+		# leave channels
 		for chan_name in list(self.channel_names):
 			self.commFunc("PART", f"{chan_name} :{comment}")
 		
 		self.sendMsg(f":{self.nick}!{self.realname}@{HOST_NAME} QUIT :{comment}")
 		
-		SOCKETS_LIST.remove(self.sock)
+		# clean up appropriate datasets
+		SOCKETS.remove(self.sock)
 		CLIENTS.remove(self)
 		if self.bot:
 			BOTS.remove(self)
@@ -328,17 +349,20 @@ class Client:
 		consolePrint(f"NUMBER OF CLIENTS: {len(CLIENTS)}")
 
 
+# Main event loop
 while True:
-	read_sockets, _, exception_sockets = select(SOCKETS_LIST, [], SOCKETS_LIST)
+	# wait for any notified sockets
+	read_sockets, _, exception_sockets = select(SOCKETS, [], SOCKETS)
 
 	for sock in read_sockets:
-		if sock == SERV_SOCK:
+		if sock == SERV_SOCK: # new connection
 			cl_sock, cl_addr = SERV_SOCK.accept()
-			consolePrint(f"OPEN connection from {cl_addr}")
-			new_cl = Client(cl_sock, "", "", cl_addr, [], False)
+			consolePrint(f"OPEN connection from {socket.getfqdn(cl_addr[0])}")
+			new_cl = Client(cl_sock, "", "", socket.getfqdn(cl_addr[0]), [], False)
 			new_cl.addClient()
 			consolePrint(f"NUMBER OF CLIENTS: {len(CLIENTS)}")
-		else:
+
+		else: # existing connection
 			client = Client.findClient(sock)
 			if client is None: continue
 
@@ -348,8 +372,15 @@ while True:
 				client.quitServer(":Leaving server")
 			
 			else:
-				for line in data.decode("utf-8").splitlines():
-					for func_key in client.func_names.keys():
-						if commContents(line, func_key) and ((client.nick != "" and client.realname != "") or (func_key == "NICK" or func_key == "USER")):
-							client.commFunc(func_key, commContents(line, func_key))
-							break
+				for line in data.decode("utf-8").split("\r\n"):
+					comm = line[:line.find(' ')] if line.find(' ') != -1 else line
+					is_valid_client = client.nick != "" and (client.realname != "" or client.bot)
+					is_name_comm = comm in ["NICK", "USER", "SERVICE"]
+					if commContents(line, comm) and (is_valid_client or is_name_comm):
+						client.commFunc(comm, commContents(line, comm))
+				# for func_key in client.func_names.keys():
+					# 	is_valid_client = client.nick != "" and (client.realname != "" or client.bot)
+					# 	is_name_comm = func_key == "NICK" or func_key == "USER" or func_key == "SERVICE"
+					# 	if commContents(line, func_key) and (is_valid_client or is_name_comm):
+					# 		client.commFunc(func_key, commContents(line, func_key))
+					# 		break
