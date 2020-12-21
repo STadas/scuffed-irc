@@ -5,16 +5,24 @@ import time
 import csv
 import random
 # IRC Config
+
 server = "::1"  # Provide a valid server IP/Hostname
 port = 6667
-channel = "#1"
-botnick = "scuffbot"
-botnickpass = "guido"
+
+channel = "#1" # Default channel to join
+botnick = "scuffbot"  # Nickname
+
+# Password
+botnickpass = "guido" 
 botpass = "<%= @guido_password %>"
 irc = None
+
+# Lists for random selection
 fish = list()
 users = list()
 facts = list()
+
+# File reading into list for fish and facts
 with open('fish.csv', 'r') as file:
     reader = csv.reader(file)
     fish = list(reader)[0]
@@ -24,12 +32,17 @@ with open('facts.csv','r') as file:
     facts = list(reader)[0]
 
 
+# list of possible commands
 def commands(text):
-    global users
+    global users # list of users in channel
     split = text.split()
+
+    # Generates list of users in channel not including the bot itself
     if len(split) > 3 and "=" == split[3]:
         users = text[text.rfind(":")+1:].split()
         users.remove(botnick)
+    
+    # Finds message sender 
     messageNick = split[0][1:split[0].find("!")]
     if len(split) == 4 and split[1] == "PART" and split[3] == "::Leaving":
         if messageNick != botnick:
@@ -37,6 +50,7 @@ def commands(text):
     if len(split) == 3 and split[1] == "JOIN":
         if messageNick != botnick:
             users.append(messageNick)
+
     if len(split) == 4 and "PRIVMSG" == split[1] and botnick == split[2]:  # private message
         messageText = split[3][1:]
         if messageText == "!fact":
@@ -44,13 +58,19 @@ def commands(text):
             receiver = text[1:text.find("!")]
             fact = random.choice(facts)
             irc.send(receiver, "* Enjoy your fact: {} *".format(fact))
+
+    # Single argument commands
     if len(split) == 4 and "PRIVMSG" == split[1] and channel == split[2] and split[3][0] == ':': # normal message
         messageText = split[3][1:]
         if messageText == "!hello":
-            irc.send(channel, "Hah you're gay!" + botnick)
+            send = text[1:text.find("!")] # Finds out the sender
+            irc.send(channel, "Hello " + sender + "!") # Sends message to chat
+        
+        # Replies with a random fish from a list of 1000
         elif messageText == "!fish":
-            irc.send(channel, "back in my day " +
-                 random.choice(fish) + " was the prize catch")
+            irc.send(channel, "Back in my day " + random.choice(fish) + " was the prize catch")
+
+        # Slaps a random user from list of users in channel
         elif messageText == "!slap":
             slapper = messageNick  # find out the slapper
             slappee = slapper
@@ -72,6 +92,16 @@ def commands(text):
             while slappee == slapper:
                 slappee = random.choice(users) if len(users) > 1 else "...themselves"
             irc.send(channel, "* {} slaps {} with a sock *".format(slapper,slappee))
+
+    # Multiple argument commands
+    if len(split) == 5 and "PRIVMSG" == split[1] and channel == split[2] and split[3][0] == ':':
+            messageText = split[3][1:]
+            if "!joinchan" in messageText:
+                newChan = split[4]
+                print(newChan)
+                irc.joinchan(newChan)
+
+
 def parseMessages(input):
     if input:
         print(input)
