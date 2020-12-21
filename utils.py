@@ -3,6 +3,9 @@ def console_print(msg: str):
 
 
 def comm_contents(data_str: str, comm_str: str, to_str: str = '\r') -> str:
+	print("comm contents")
+	print(data_str)
+	print(comm_str)
 	if data_str.find(comm_str) == -1:
 		return False
 	

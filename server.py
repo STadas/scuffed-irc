@@ -30,7 +30,7 @@ CREATE_TIME = f"{today.strftime('%Y-%m-%d, %H:%M:%S')} {reference.LocalTimezone(
 HOST_NAME = "the-inn"
 VERSION = "0.3"
 SERVER_NAME = "Yulgar's Inn"
-SERVER_IP = "localhost"
+SERVER_IP = "::1"
 PORT = 6667
 
 SERV_SOCK = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
@@ -292,6 +292,7 @@ class Client:
 
 
 	def service(self, params: str):
+		print(params)
 		nick = params[:params.find(" ")]
 		desc = params[params.find(":") + 1:]
 
@@ -338,6 +339,7 @@ while True:
 			
 			else:
 				for line in data.decode("utf-8").splitlines():
+					print(line)
 					for func_key in client.func_names.keys():
 						if comm_contents(line, func_key) and ((client.nick != "" and client.realname != "") or (func_key == "NICK" or func_key == "USER")):
 							client.comm_func(func_key, comm_contents(line, func_key))
