@@ -145,7 +145,7 @@ class CHATBOT:
                 while slappee == slapper:
                     slappee = random.choice(users) if len(
                         users) > 1 else "...themselves (maybe invite a friend to slap next time)"
-                self.irc.sendchan("* {} slaps {} *".format(slapper, slappee))
+                self.irc.sendchan(f"* {slapper} slaps {slappee} *")
             elif messageText == "!fishSlap":
                 slapper = text[1:text.find("!")]  # finds out the slapper
                 slappee = slapper
@@ -153,16 +153,14 @@ class CHATBOT:
                     slappee = random.choice(users) if len(
                         users) > 1 else "...themselves"
                 weapon = random.choice(fish)
-                self.irc.sendchan(
-                    "* {} slaps {} with a {} *".format(slapper, slappee, weapon))
+                self.irc.sendchan(f"* {slapper} slaps {slappee} with a {weapon} *")
             elif messageText == "!sock":
                 slapper = text[1:text.find("!")]  # finds out the slapper
                 slappee = slapper
                 while slappee == slapper:
                     slappee = random.choice(users) if len(
                         users) > 1 else "...themselves"
-                self.irc.sendchan(
-                    channel, "* {} slaps {} with a sock *".format(slapper, slappee))
+                self.irc.sendchan(f"* {slapper} slaps {slappee} with a sock *")
 
     def connectIRC(self):
         while not self.irc.connected:

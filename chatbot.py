@@ -112,8 +112,8 @@ def commands(text):
             messageText = split[3][1:]
             if "!joinchan" in messageText:
                 newChan = split[4]
-                print(newChan)
-                irc.joinchan(newChan)
+                channel = newChan
+                irc.join()
 
 
 def parseMessages(input):

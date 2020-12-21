@@ -23,3 +23,15 @@ hostname: your device's hostname
 servername: <hostname>'s server
 ip: '::', which is any IPv6 of your device in the local network (e.g. '::1', '', 'localhost'...)
 port: 6667
+
+
+
+========== BOT INSTRUCTIONS/FLAGS/COMMANDS ==========
+
+!hello - Replies to the sender with a message and the current time.
+!fish - Sends a message to the chat with a name of a fish from a list of ~1000 fish.
+!slap - Sends a message to the chat stating; "<Sender> slaps <Random user>" where 'Sender' is the user who typed the command and 'Random user' is a random user from list of current users in the channel.
+!fishSlap - Sends a message to the chat stating; "<Sender> slaps <Random user> with a <Fish>" where 'Sender' is the user who typed the command and 'Random user' is a random user from a list of current users in the channel and 'Fish' is a random fish from a list of ~1000 fish.
+!sock - Sends a message to the chat stating; "<Sender> slaps <Random user> with a sock" where 'Sender' is the user who typed the command and 'Random user' is a random user from a list of current users in the channel.
+
+!fact - Sends a random fact to the sender through PM
