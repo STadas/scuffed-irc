@@ -374,7 +374,6 @@ if __name__ == "__main__":
 	# Time and timezone
 	today = datetime.now()
 	CREATE_TIME = f"{today.strftime('%Y-%m-%d, %H:%M:%S')} {reference.LocalTimezone().tzname(today)}"
-	print("Start time:", CREATE_TIME)
 	
 	VERSION = "0.3"
 
@@ -406,7 +405,8 @@ if __name__ == "__main__":
 
 	SEM = Semaphore()
 
-	print("\033[1;36mServer started.")
+	print("\033[1;36mStart time:", CREATE_TIME)
+	print("Server started.")
 	print(f"Listening on [{SERVER_IP}]:{PORT}\033[0m")
 
 	# Main loop
