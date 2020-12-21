@@ -42,7 +42,7 @@ class Client:
 		}
 
 		self.run()
-	
+
 
 	# Run thread, listen to socket
 	def run(self):
@@ -67,14 +67,14 @@ class Client:
 						SEM.release()
 						return
 			SEM.release()
-	
+
 
 	# Add new socket and client to lists
 	def addClient(self):
 		SOCKETS.append(self.sock)
 		CLIENTS.append(self)
 		consolePrint(f"USER COUNT: {len(CLIENTS) - len(BOTS)}, BOT COUNT: {len(BOTS)}")
-	
+
 
 	# Receive and parse message(s)/command(s) from client socket
 	def parseData(self) -> bytes:
@@ -193,7 +193,7 @@ class Client:
 		self.sendMsg("End of NAMES list", "366", [chan_name])
 
 
-	# ========= MAIN RESPONSE FUNCTIONS =========
+	# ================== MAIN RESPONSE FUNCTIONS ==================
 
 
 	# Set nick for the Client
@@ -289,8 +289,12 @@ class Client:
 
 	# Remove client from channel
 	def partChannel(self, channel_and_comment: str):
-		chan_name = channel_and_comment[:channel_and_comment.find(' ')]
 		comment = channel_and_comment[channel_and_comment.find(':') + 1:]
+		end_index = channel_and_comment.find(' ')
+		if end_index == -1:
+			comment = ""
+			end_index = len(channel_and_comment)
+		chan_name = channel_and_comment[:end_index]
 
 		consolePrint(f"{self.nick} LEAVING CHANNEL {chan_name}")
 
@@ -343,8 +347,16 @@ class Client:
 		CLIENTS.remove(self)
 		if self.bot:
 			BOTS.remove(self)
+		
+		# close the socket if it's still open
+		try:
+			self.sock.close()
+		except:
+			pass
 
 		consolePrint(f"USER COUNT: {len(CLIENTS) - len(BOTS)}, BOT COUNT: {len(BOTS)}")
+
+		del self
 	
 
 def handleArgs(args: dict):
@@ -363,9 +375,14 @@ def handleArgs(args: dict):
 	if "port" in keys:
 		PORT = args["port"]
 	
+	if "motd" not in keys or "motdfile" in keys:
+		readMotd()
+
+
+def readMotd():
+	global MOTD
 	try:
-		if "motd" not in keys or "motdfile" in keys:
-			MOTD = "MOTD: " + open(MOTD_FILE, "r").read()
+		MOTD = "MOTD: " + open(MOTD_FILE, "r").read()
 	except:
 		pass
 
@@ -381,7 +398,7 @@ if __name__ == "__main__":
 	MOTD_FILE = "motd.txt"
 	HOST_NAME = socket.gethostname()
 	SERVER_NAME = HOST_NAME + "'s server"
-	SERVER_IP = "::"
+	SERVER_IP = "::1"
 	PORT = 6667
 
 	args = parseArgs(sys.argv)
@@ -390,11 +407,15 @@ if __name__ == "__main__":
 		quit()
 	elif isinstance(args, dict):
 		handleArgs(args)
+	else:
+		readMotd()
 
+	# set up the server socket
 	SERV_SOCK = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
 	SERV_SOCK.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 	SERV_SOCK.bind((SERVER_IP, PORT))
 
+	# initialise global lists, dict
 	SOCKETS = [SERV_SOCK]
 	CLIENTS = []
 	BOTS = []
@@ -414,5 +435,6 @@ if __name__ == "__main__":
 		SERV_SOCK.listen(5)
 		cl_sock, cl_addr = SERV_SOCK.accept()
 
+		# initialise a new thread for a new Client object
 		consolePrint(f"OPEN connection from {socket.getfqdn(cl_addr[0])}")
 		Thread(target=Client, args=[cl_sock, "", "", socket.getfqdn(cl_addr[0])]).start()
