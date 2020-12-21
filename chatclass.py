@@ -234,7 +234,7 @@ def nickfile(inputList):
         print("expecting 1 input was given : ", inputList)
         return None
     if os.path.exists(inputList[0]):
-       with open(inputList[0]) as f:
+       with open(inputList[0],'r') as f:
            try:
                lines = f.read().splitlines()
                return lines
