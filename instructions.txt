@@ -1,0 +1,25 @@
+========== SERVER INSTRUCTIONS/FLAGS ==========
+
+--- EXAMPLES ---
+python3 server.py
+./server.py
+./server.py -help
+python3 server.py -motd 'This is my motd' -hostname 'the-inn' -port 1337
+./server.py -servername \"Yulgar's Inn\" -motdfile 'mymotd.txt')
+
+--- AVAILABLE FLAGS ---
+-help - displays this help message
+-motd - sets motd to provided string
+-motdfile - sets MOTD file to read from (overrides -motd if specified file exists)
+-hostname - sets hostname to use
+-servername - sets server name to use
+-ip - sets IP to use
+-port - sets port to listen to
+
+--- DEFAULTS ---
+motd: 'No MOTD set.'
+motdfile: 'motd.txt'
+hostname: your device's hostname
+servername: <hostname>'s server
+ip: '::', which is any IPv6 of your device in the local network (e.g. '::1', '', 'localhost'...)
+port: 6667
