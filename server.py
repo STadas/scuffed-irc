@@ -18,11 +18,11 @@ https://www.youtube.com/watch?v=Lbfe3-v7yE0&list=PLQVvvaa0QuDdzLB_0JSTTcl8E8jsJL
 
 class Client:
 	# Initialise the Client class
-	def __init__(self, sock: socket.socket, nick: str, realname: str, ip: str):
+	def __init__(self, sock: socket.socket, ip: str):
 		self.sock = sock
-		self.nick = nick
-		self.realname = realname
 		self.ip = ip
+		self.nick = ""
+		self.realname = ""
 		self.channel_names = set()
 		self.welcome_done = False
 		self.bot = False
@@ -65,14 +65,7 @@ class Client:
 						SEM.release()
 						return
 			SEM.release()
-
-
-	# Add new socket and client to lists
-	def addClient(self):
-		SOCKETS.append(self.sock)
-		CLIENTS.append(self)
-		consolePrint(f"USER COUNT: {len(CLIENTS) - len(BOTS)}, BOT COUNT: {len(BOTS)}")
-
+	
 
 	# Receive and parse message(s)/command(s) from client socket
 	def parseData(self) -> bytes:
@@ -87,6 +80,20 @@ class Client:
 			return None
 		except ConnectionResetError:
 			return None
+
+
+	# Return function by IRC command name for ease of use
+	def commFunc(self, func: str, arg):
+		if func in self.func_names.keys():
+			return self.func_names[func](arg)
+		else: return False
+
+
+	# Add new socket and client to lists
+	def addClient(self):
+		SOCKETS.append(self.sock)
+		CLIENTS.append(self)
+		consolePrint(f"USER COUNT: {len(CLIENTS) - len(BOTS)}, BOT COUNT: {len(BOTS)}")
 	
 
 	# Send message(s)/commmand(s) to client socket
@@ -108,13 +115,6 @@ class Client:
 			consolePrint("FAILED TO SEND")
 		except:
 			consolePrint("UNEXPECTED ERROR")
-
-	
-	# Return function by IRC command name for ease of use
-	def commFunc(self, func: str, arg):
-		if func in self.func_names.keys():
-			return self.func_names[func](arg)
-		else: return False
 	
 
 	# Find client by nick, returns None if not found
@@ -445,7 +445,7 @@ if __name__ == "__main__":
 
 		# initialise a new thread for a new Client object
 		consolePrint(f"OPEN connection from {socket.getfqdn(cl_addr[0])}")
-		newthread = Thread(target=Client, args=[cl_sock, "", "", socket.getfqdn(cl_addr[0])])
+		newthread = Thread(target=Client, args=[cl_sock, socket.getfqdn(cl_addr[0])])
 		
 		# to kill all threads when pressing Ctrl+C
 		# (https://stackoverflow.com/questions/11815947/cannot-kill-python-script-with-ctrl-c)
