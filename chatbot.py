@@ -231,28 +231,28 @@ class CHATBOT:
         def sendchan(self, msg):
             # Transfer data
             self.irc.send(bytes("PRIVMSG " + self.channel +
-                                " :" + msg + "\n", "UTF-8"))
+                                " :" + msg + "\r\n", "UTF-8"))
 
 
         #send message to the supplied user
         def sendpm(self, user, msg):
             self.irc.send(bytes("PRIVMSG " + user +
-                                " :" + msg + "\n", "UTF-8"))
+                                " :" + msg + "\r\n", "UTF-8"))
 
                                 
         #send a who command //UNUSED
         def who(self, channel):
-            self.irc.send(bytes("WHO " + self.channel + "\n", "UTF-8"))
+            self.irc.send(bytes("WHO " + self.channel + "\r\n", "UTF-8"))
 
 
         #send a nick command for currrent nick
         def nick(self):
-            self.irc.send(bytes("NICK " + self.botnick + "\n", "UTF-8"))
+            self.irc.send(bytes("NICK " + self.botnick + "\r\n", "UTF-8"))
 
 
         #send a join command for current channel
         def join(self):
-            self.irc.send(bytes("JOIN " + self.channel + "\n", "UTF-8"))
+            self.irc.send(bytes("JOIN " + self.channel + "\r\n", "UTF-8"))
 
 
         #
@@ -272,9 +272,9 @@ class CHATBOT:
                 #//UNUSED
             if service:
                 self.irc.send(bytes("SERVICE " + self.botnick +
-                                    " " + ":chatbot "+"\n", "UTF-8"))
+                                    " " + ":chatbot "+"\r\n", "UTF-8"))
             else:
-                self.irc.send(bytes("USER " + self.botnick + " 0  * " + " :REALNAME\n", "UTF-8"))
+                self.irc.send(bytes("USER " + self.botnick + " 0  * " + " :REALNAME\r\n", "UTF-8"))
             self.nick()
             time.sleep(1)
             self.join()
