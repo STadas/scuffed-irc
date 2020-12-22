@@ -1,4 +1,10 @@
 #!/bin/python3
+import sys, socket, string
+from threading import Thread, Semaphore
+from datetime import datetime
+from pytz import reference
+from serverutils import consolePrint, commContents, parseArgs
+
 """
 https://tools.ietf.org/html/rfc2810 - general architecture
 https://tools.ietf.org/html/rfc2812 - client/server comms
@@ -6,16 +12,8 @@ https://docs.python.org/3.9/howto/sockets.html - python socket docs
 https://medium.com/python-pandemonium/python-socket-communication-e10b39225a4c - tutorial 1
 https://realpython.com/python-sockets/ - tutorial 2
 https://www.youtube.com/watch?v=Lbfe3-v7yE0&list=PLQVvvaa0QuDdzLB_0JSTTcl8E8jsJLhR5 - tutorial videos playlist
-https://ircv3.net/specs/core/capability-negotiation.html - stuff i found on CAP, the initial command, though most likely wont matter (mostly didnt)
-https://stackoverflow.com/questions/5163255/regular-expression-to-match-irc-nickname - regex for nicks
 --------------------------------------------------------------------------------
 """
-
-import sys, socket, string
-from threading import Thread, Semaphore
-from datetime import datetime
-from pytz import reference
-from serverutils import consolePrint, commContents, parseArgs
 
 
 class Client:
@@ -37,7 +35,7 @@ class Client:
 			"PART": self.partChannel,
 			"NICK": self.setNick,
 			"USER": self.setRealname,
-			"SERVICE": self.serviceClient,
+			"SERVICE": self.botClient,
 			"QUIT": self.quitServer
 		}
 
@@ -98,7 +96,7 @@ class Client:
 				msg_args = list(msg_args)
 				if len(msg_args) == 0 or msg_args[0] != self.nick:
 					msg_args.insert(0, self.nick)
-				msg = f":{HOST_NAME} {reply_code} {' '.join(msg_args)} :{msg}"
+				msg = f":{SERV_ARGS['hostname']} {reply_code} {' '.join(msg_args)} :{msg}"
 
 			msg = bytes((msg + ("\r\n" if msg[len(msg)-2:] != "\r\n" else "")).encode("utf-8"))
 			print("\033[1;31m<<\033[0m", f"\033[37m{msg}\033[0m")
@@ -152,13 +150,28 @@ class Client:
 		return True
 	
 
+	# Send MOTD message
+	def sendMotd(self):
+		MOTD = SERV_ARGS['motd']
+		if MOTD != "":
+			self.sendMsg(f"- {SERV_ARGS['servername']} Message of the day - ", "375")
+
+			# limit the motd message to be 80 characters per line as per protocol
+			for line in [ MOTD[i:i + 80] for i in range(0, len(MOTD), 80) ]:
+				self.sendMsg(f"- {line}", "372")
+				
+			self.sendMsg("End of MOTD", "376")
+		else:
+			self.sendMsg("No MOTD set.", "422")
+	
+
 	# Welcome new user if nick and realname are valid or if nick is valid and the client is a bot
 	def welcomeClient(self):
-		if not self.welcome_done and (self.bot or self.realname != "") and self.nick != "": 
-			if self.bot: 
+		if not self.welcome_done and (self.bot or self.realname != "") and self.nick != "":
+			if self.bot:
 				self.sendMsg(f"You are service {self.nick}", "383")
-			else: 
-				self.sendMsg(f"Hello, welcome to {SERVER_NAME} {self.nick}!{self.realname}@{HOST_NAME}", "001")
+			else:
+				self.sendMsg(f"Hello, welcome to {SERV_ARGS['servername']} {self.nick}!{self.realname}@{SERV_ARGS['hostname']}", "001")
 
 			# client and bot counts; string formatting in accordance to counts
 			bot_count = len(BOTS)
@@ -166,11 +179,11 @@ class Client:
 			cl_count_str = f'are {cl_count} users' if cl_count != 1 else 'is 1 user'
 			bot_count_str = f'{bot_count} services' if bot_count != 1 else '1 service'
 
-			self.sendMsg(f"Your host is {HOST_NAME}, running version {VERSION}", "002")
-			self.sendMsg(f"This server was created {CREATE_TIME}", "003")
-			self.sendMsg(f"{HOST_NAME} {VERSION}", "004")
+			self.sendMsg(f"Your host is {SERV_ARGS['hostname']}, running version {SERV_ARGS['version']}", "002")
+			self.sendMsg(f"This server was created {SERV_ARGS['createtime']}", "003")
+			self.sendMsg(f"{SERV_ARGS['hostname']} {SERV_ARGS['version']}", "004")
 			self.sendMsg(f"There {cl_count_str} and {bot_count_str} on the server.", "251")
-			self.sendMsg(MOTD, "422")
+			self.sendMotd()
 
 			# make sure the welcome message is sent only once
 			self.welcome_done = True
@@ -180,11 +193,11 @@ class Client:
 
 	# Send names list
 	def sendNamesList(self, chan_name: str):
-		# limit names list response to no more than 40 characters per line for better log readability
+		# limit names list response to no more than 80 characters per line
 		nick_buffer = ""
 		for chan_cl in CHANNELS[chan_name]:
 			nick_buffer += chan_cl.nick + " "
-			if len(nick_buffer) >= 32:
+			if len(nick_buffer) >= 72:
 				self.sendMsg(nick_buffer[:-1], "353", [f"= {chan_name}"])
 				nick_buffer = ""
 		if len(nick_buffer) > 0:
@@ -203,7 +216,7 @@ class Client:
 		if not self.validName("nick", nick):
 			return False
 
-		self.sendMsg(f":{self.nick}!{self.realname}@{HOST_NAME} NICK {nick}")
+		self.sendMsg(f":{self.nick}!{self.realname}@{SERV_ARGS['hostname']} NICK {nick}")
 		self.nick = nick
 		self.welcomeClient()
 		
@@ -242,9 +255,9 @@ class Client:
 
 		# announce in the channel that the client has joined
 		for chan_cl in CHANNELS[chan_name]:
-			chan_cl.sendMsg(f":{self.nick}!{self.realname}@{HOST_NAME} JOIN {chan_name}")
+			chan_cl.sendMsg(f":{self.nick}!{self.realname}@{SERV_ARGS['hostname']} JOIN {chan_name}")
 
-		self.sendMsg("No topic", "331", [chan_name]) #TODO: channel topics
+		self.sendMsg("No topic", "331", [chan_name])
 		self.sendNamesList(chan_name)
 		consolePrint(f"JOINED CHANNEL {chan_name}")
 		
@@ -252,7 +265,7 @@ class Client:
 	# Send verbose list of clients in the channel
 	def whoChannel(self, chan_name: str):
 		for chan_cl in CHANNELS[chan_name]:
-			msg_args = [chan_name, chan_cl.realname, HOST_NAME, HOST_NAME, chan_cl.nick, "H"]
+			msg_args = [chan_name, chan_cl.realname, SERV_ARGS['hostname'], SERV_ARGS['hostname'], chan_cl.nick, "H"]
 			self.sendMsg(f"0 {chan_cl.realname}", "352", msg_args)
 
 		self.sendMsg("End of WHO list", "315", [chan_name])
@@ -273,7 +286,7 @@ class Client:
 			for chan_cl in CHANNELS[target]:
 				if chan_cl.sock == self.sock:
 					continue
-				chan_cl.sendMsg(f":{self.nick}!{self.realname}@{HOST_NAME} PRIVMSG {target} :{msg}")
+				chan_cl.sendMsg(f":{self.nick}!{self.realname}@{SERV_ARGS['hostname']} PRIVMSG {target} :{msg}")
 		else:
 			recipient = self.findClient(target)
 			if any(c not in ALLOWED_NAME_CHARS for c in target) or recipient not in CLIENTS:
@@ -284,7 +297,7 @@ class Client:
 
 			# yes, you can message yourself. This is intentional, not everyone has friends :(
 			
-			recipient.sendMsg(f":{self.nick}!{self.realname}@{HOST_NAME} PRIVMSG {target} :{msg}")
+			recipient.sendMsg(f":{self.nick}!{self.realname}@{SERV_ARGS['hostname']} PRIVMSG {target} :{msg}")
 			
 
 	# Remove client from channel
@@ -305,7 +318,7 @@ class Client:
 		
 		# announce in the channel that the client has left
 		for chan_cl in CHANNELS[chan_name]:
-			chan_cl.sendMsg(f":{self.nick}!{self.realname}@{HOST_NAME} PART {chan_name} :{comment}")
+			chan_cl.sendMsg(f":{self.nick}!{self.realname}@{SERV_ARGS['hostname']} PART {chan_name} :{comment}")
 		
 		# clean up appropriate datasets
 		self.channel_names.remove(chan_name)
@@ -317,11 +330,11 @@ class Client:
 	
 	# Respond to a ping from the client
 	def pongClient(self, lag_str: str):
-		self.sendMsg(f":{HOST_NAME} PONG {self.ip} :{lag_str}")
+		self.sendMsg(f":{SERV_ARGS['hostname']} PONG {self.ip} :{lag_str}")
 
 
 	# Set client as service/bot
-	def serviceClient(self, params: str):
+	def botClient(self, params: str):
 		nick = params[:params.find(" ")]
 		desc = params[params.find(":") + 1:]
 
@@ -332,6 +345,7 @@ class Client:
 			self.welcomeClient()
 
 
+	# Clean up when client leaves server
 	def quitServer(self, comment: str = ":Leaving"):
 		consolePrint(f"CLOSE connection from {self.ip}")
 		comment = comment[comment.find(":") + 1:]
@@ -340,9 +354,9 @@ class Client:
 		for chan_name in list(self.channel_names):
 			self.commFunc("PART", f"{chan_name} :{comment}")
 		
-		self.sendMsg(f":{self.nick}!{self.realname}@{HOST_NAME} QUIT :{comment}")
+		self.sendMsg(f":{self.nick}!{self.realname}@{SERV_ARGS['hostname']} QUIT :{comment}")
 		
-		# clean up appropriate datasets
+		# clean up datasets
 		SOCKETS.remove(self.sock)
 		CLIENTS.remove(self)
 		if self.bot:
@@ -359,30 +373,20 @@ class Client:
 		del self
 	
 
-def handleArgs(args: dict):
-	global MOTD, MOTD_FILE, HOST_NAME, SERVER_NAME, SERVER_IP, PORT
-	keys = args.keys()
-	if "motd" in keys:
-		MOTD = "MOTD: " + args["motd"]
-	if "motdfile" in keys:
-		MOTD_FILE = args["motdfile"]
-	if "hostname" in keys:
-		HOST_NAME = args["hostname"]
-	if "servername" in keys:
-		SERVER_NAME = args["servername"]
-	if "ip" in keys:
-		SERVER_IP = args["ip"]
-	if "port" in keys:
-		PORT = args["port"]
+# Assign parsed arguments
+def handleArgs(read_args: dict):
+	keys = read_args.keys()
+	for k in keys:
+		SERV_ARGS[k] = read_args[k]
 	
 	if "motd" not in keys or "motdfile" in keys:
 		readMotd()
 
 
+# Read the MOTD file if it exists
 def readMotd():
-	global MOTD
 	try:
-		MOTD = "MOTD: " + open(MOTD_FILE, "r").read()
+		SERV_ARGS['motd'] = "MOTD: " + open(SERV_ARGS["motdfile"], "r").read()
 	except:
 		pass
 
@@ -390,30 +394,35 @@ def readMotd():
 if __name__ == "__main__":
 	# Time and timezone
 	today = datetime.now()
-	CREATE_TIME = f"{today.strftime('%Y-%m-%d, %H:%M:%S')} {reference.LocalTimezone().tzname(today)}"
-	
-	VERSION = "0.3"
 
-	MOTD = "No MOTD set."
-	MOTD_FILE = "motd.txt"
-	HOST_NAME = socket.gethostname()
-	SERVER_NAME = HOST_NAME + "'s server"
-	SERVER_IP = "::1"
-	PORT = 6667
+	# Server arguments defaults
+	SERV_ARGS = {
+		"createtime": f"{today.strftime('%Y-%m-%d, %H:%M:%S')} {reference.LocalTimezone().tzname(today)}",
+		"version": "0.4",
+		"motd": "",
+		"motdfile": "motd.txt",
+		"hostname": socket.gethostname(),
+		"servername": f"{socket.gethostname()}'s server",
+		"ip": "::1",
+		"port": 6667
+	}
 
-	args = parseArgs(sys.argv)
-	if args == 1:
-		sys.exit(args)
+	print(f"\033[1;36mStart time: {SERV_ARGS['createtime']}.\033[0m")
+
+	read_args = parseArgs(sys.argv)
+	if read_args == 1:
+		sys.exit(read_args)
 		quit()
-	elif isinstance(args, dict):
-		handleArgs(args)
+	elif isinstance(read_args, dict):
+		handleArgs(read_args)
+		print("\033[1;36mParsed arguments.")
 	else:
 		readMotd()
 
 	# set up the server socket
 	SERV_SOCK = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
 	SERV_SOCK.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-	SERV_SOCK.bind((SERVER_IP, PORT))
+	SERV_SOCK.bind((SERV_ARGS["ip"], SERV_ARGS["port"]))
 
 	# initialise global lists, dict
 	SOCKETS = [SERV_SOCK]
@@ -426,9 +435,8 @@ if __name__ == "__main__":
 
 	SEM = Semaphore()
 
-	print("\033[1;36mStart time:", CREATE_TIME)
-	print("Server started.")
-	print(f"Listening on [{SERVER_IP}]:{PORT}\033[0m")
+	print(f"\033[1;36mListening on [{SERV_ARGS['ip']}]:{SERV_ARGS['port']}.")
+	print("Server is live.\033[0m")
 
 	# Main loop
 	while True:
@@ -437,4 +445,10 @@ if __name__ == "__main__":
 
 		# initialise a new thread for a new Client object
 		consolePrint(f"OPEN connection from {socket.getfqdn(cl_addr[0])}")
-		Thread(target=Client, args=[cl_sock, "", "", socket.getfqdn(cl_addr[0])]).start()
+		newthread = Thread(target=Client, args=[cl_sock, "", "", socket.getfqdn(cl_addr[0])])
+		
+		# to kill all threads when pressing Ctrl+C
+		# (https://stackoverflow.com/questions/11815947/cannot-kill-python-script-with-ctrl-c)
+		newthread.daemon = True
+
+		newthread.start()
