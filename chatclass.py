@@ -5,7 +5,7 @@ import csv
 import random
 import socket
 import sys
-
+import datetime 
 #main class
 class CHATBOT:
     def __init__(self, inputDict):
@@ -25,7 +25,7 @@ class CHATBOT:
         print("Bot nick list   : ",self.botnicks)
         print("Current botnick : ",self.botnick)
         self.irc = self.IRC(self.server, self.port, self.channel, self.botnick)
-        #read in files and facts 
+        #read in files of fish and facts
         global fish
         fish = self.parseCSV("fish.csv")
         global facts
@@ -38,6 +38,8 @@ class CHATBOT:
             return input
         else:
             return None
+
+
     #execute commands based on response
     def commands(self, text):
         global users # list of users in channel
@@ -102,8 +104,11 @@ class CHATBOT:
             messageText = split[3][1:]
 
             if messageText == "!hello":
+                now = datetime.datetime.now()
+                date = now.strftime("%d/%m/%Y")
+                time = now.strftime("%H:%M:%S")
                 sender = text[1:text.find("!")] # Finds out the sender
-                self.irc.sendchan("Hah you're gay!" + sender + "!")
+                self.irc.sendchan("Hello " + sender + " the date is "+ date + " and the time is " +time )
 
             # Replies with a random fish from a list of ~1000   
             elif messageText == "!fish":
@@ -147,6 +152,7 @@ class CHATBOT:
                         users) > 1 else "...themselves"
                 self.irc.sendchan(
                     channel, "* {} slaps {} with a sock *".format(slapper, slappee))
+                    
         # multiple argument bot commands
         if len(split) == 5 and "PRIVMSG" == split[1] and self.channel == split[2] and split[3][0] == ':':
             
@@ -160,6 +166,8 @@ class CHATBOT:
                 self.channel = newChan
                 self.irc.channel = self.channel
                 self.irc.connected = False
+
+
     #connect bot to irc server
     def connectIRC(self):
         while not self.irc.connected:
@@ -171,6 +179,7 @@ class CHATBOT:
                 self.irc.connected = False
                 time.sleep(1)
                 pass
+
 
     # Checks for incoming messages from server
     def run(self):
@@ -188,11 +197,19 @@ class CHATBOT:
                     print(command+"\n")
                     self.commands(command)
 
+
     #read csv from path
     def parseCSV(self, path):
-        with open(path, 'r') as file:
-            reader = csv.reader(file)
-            return list(reader)[0]
+        if os.path.exists(path):
+            with open(path, 'r') as file:
+                try:
+                    reader = csv.reader(file)
+                    return list(reader)[0]
+                except:
+                    print("error reading ", path)
+            
+        else:
+            print(path, " does not exist , please re add the file")
 
 
     #class to handle irc socket communication
@@ -245,11 +262,11 @@ class CHATBOT:
             try:
                 self.irc.connect((self.server, self.port))
             except socket.gaierror as e:
-                print("server : ", self.server, " | port ", self.port)
+                print("server : ", self.server, " | port ", self.port , " is unknown")
                 print(e)
                 exit()
             except OSError as e:
-                print("server : ", self.server, " | port ", self.port)
+                print("server : ", self.server, " | port ", self.port, " refused connection")
                 print(e)
                 exit()
                 #//UNUSED
@@ -277,7 +294,16 @@ sys.argv.pop(0)
 args = sys.argv
 #if help only help
 if len(args) == 1 and args[0] == "-help":
-    print("help command")
+    if os.path.exists("instructions.txt"):
+       with open("instructions.txt",'r') as f:
+           try:
+               lines = f.read()
+               test = lines.split("========== BOT INSTRUCTIONS/FLAGS/COMMANDS ==========")
+               print(test[1])
+           except : 
+               print("instructions file reading ERROR")
+    else:
+        print("instructions file missing ERROR")
     exit()
 
 #flag commmands
