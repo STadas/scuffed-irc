@@ -57,13 +57,17 @@ class Client:
 				comm = line[:line.find(' ')] if line.find(' ') != -1 else line
 				is_valid_client = self.nick != "" and (self.realname != "" or self.bot)
 				is_name_comm = comm in ["NICK", "USER", "SERVICE"]
+				is_valid_comm = comm in self.func_names
 				comm_contents = commContents(line, comm)
 
 				if comm_contents and (is_valid_client or is_name_comm):
-					self.commFunc(comm, comm_contents)
-					if comm == "QUIT":
-						SEM.release()
-						return
+					if is_valid_comm:
+						self.commFunc(comm, comm_contents)
+						if comm == "QUIT":
+							SEM.release()
+							return
+					else:
+						self.sendMsg("Unknown command", "421", comm)
 			SEM.release()
 	
 
@@ -140,7 +144,8 @@ class Client:
 			found_client = self.findClient(name)
 			if found_client is not None and found_client.sock != self.sock:
 				consolePrint("REJECTED nick (already taken)")
-				self.sendMsg(f"Nick rejected. This one is already taken", "433")	
+				self.sendMsg(f"Nick rejected. This one is already taken", "433")
+				return False
 		
 		if error != "":
 			consolePrint(f"REJECTED {type}. {error}")
@@ -247,6 +252,9 @@ class Client:
 		# if channel exists, add client; if not, create channel with client
 		consolePrint(f"{self.nick} TRYING TO JOIN CHANNEL {chan_name}")
 		if chan_name in CHANNELS.keys():
+			if chan_name in self.channel_names or self in CHANNELS[chan_name]:
+				self.sendMsg("You are already in that channel.", "403", [chan_name])
+				return
 			CHANNELS[chan_name].append(self)
 		else:
 			consolePrint(f"CREATING CHANNEL {chan_name}")
