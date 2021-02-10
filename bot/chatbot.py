@@ -138,8 +138,7 @@ class CHATBOT:
                 
                 # Chooses a random fish
                 weapon = random.choice(fish)
-                self.irc.sendchan(
-                    "* {} slaps {} with a {} *".format(slapper, slappee, weapon))
+                self.irc.sendchan("* {} slaps {} with a {} *".format(slapper, slappee, weapon))
                     
             # As before *Slaps* a random user with a sock
             elif messageText == "!sock":
