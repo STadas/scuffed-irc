@@ -67,7 +67,7 @@ class Client:
 							SEM.release()
 							return
 					else:
-						self.sendMsg("Unknown command", "421", comm)
+						self.sendMsg("Unknown command", "421", [comm])
 			SEM.release()
 	
 
