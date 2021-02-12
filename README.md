@@ -48,7 +48,7 @@ Command | Description
 -|-
 `!fact` | Sends a random fact as a PM to the user
 
-### **Ecamples**
+### **Examples**
 `python3 chatbot.py`<br>
 `python3 chatbot.py -help`<br>
 `python3 chatbot.py -server ::1 -port 6667 -nick nick1 nick2 -nickfile nicks.txt`<br>
